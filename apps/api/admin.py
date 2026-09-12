@@ -3,6 +3,7 @@
 import hashlib
 from contextlib import asynccontextmanager
 from urllib.parse import urlsplit
+from uuid import UUID
 
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -16,7 +17,13 @@ from platform_core.admin_auth import (
 )
 from platform_core.backup_status import backup_health
 from platform_core.config import get_settings
-from pydantic import BaseModel
+from platform_core.service_registry import (
+    ServiceNotFound,
+    ServiceRevisionConflict,
+    ServiceUpdateRejected,
+    update_service,
+)
+from pydantic import BaseModel, ConfigDict, StrictBool, StrictInt
 from redis.exceptions import RedisError
 
 router = APIRouter(prefix="/api/admin")
@@ -74,8 +81,28 @@ async def require_audit(admin: AdminIdentity = AUTH_DEPENDENCY) -> AdminIdentity
     return admin
 
 
+async def require_manage(admin: AdminIdentity = AUTH_DEPENDENCY) -> AdminIdentity:
+    async with database() as db:
+        allowed = await has_permission(db, admin, "admin:manage")
+    if not allowed:
+        raise HTTPException(403, "Access denied")
+    return admin
+
+
 VIEW_DEPENDENCY = Depends(require_view)
 AUDIT_DEPENDENCY = Depends(require_audit)
+MANAGE_DEPENDENCY = Depends(require_manage)
+
+
+class ServiceUpdateForm(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_revision: StrictInt
+    reason: str
+    description_ar: str | None = None
+    base_price_halalas: StrictInt | None = None
+    enabled: StrictBool | None = None
+    confirm: StrictBool = False
 
 
 @router.post("/login")
@@ -118,7 +145,8 @@ async def logout(request: Request, response: Response, admin: AdminIdentity = AU
 
 @router.get("/me")
 async def me(admin: AdminIdentity = VIEW_DEPENDENCY):
-    return {"username": admin.username, "role": admin.role_code}
+    return {"username": admin.username, "role": admin.role_code,
+            "service_activation_enabled": get_settings().service_activation_enabled}
 
 
 @router.get("/overview")
@@ -146,6 +174,41 @@ async def orders(_admin: AdminIdentity = VIEW_DEPENDENCY):
           FROM orders o JOIN services s ON s.id=o.service_id
           ORDER BY o.created_at DESC,o.id DESC LIMIT 100""")
     return [{**dict(row), "id": str(row["id"])} for row in rows]
+
+
+@router.get("/services")
+async def services(_admin: AdminIdentity = VIEW_DEPENDENCY):
+    async with database() as db:
+        rows = await db.fetch("""SELECT s.id,s.slug,s.name_ar,s.description_ar,
+          s.base_price_halalas,s.processor_type,s.enabled,s.revision,
+          c.name_ar AS category_name_ar FROM services s
+          JOIN service_categories c ON c.id=s.category_id
+          ORDER BY c.name_ar,s.name_ar,s.id LIMIT 200""")
+    return [{**dict(row), "id": str(row["id"])} for row in rows]
+
+
+@router.patch("/services/{service_id}")
+async def edit_service(request: Request, service_id: UUID, form: ServiceUpdateForm,
+                       admin: AdminIdentity = MANAGE_DEPENDENCY):
+    check_origin(request)
+    async with database() as db:
+        try:
+            return await update_service(
+                db, service_id, admin.id,
+                expected_revision=form.expected_revision,
+                reason=form.reason,
+                description_ar=form.description_ar,
+                base_price_halalas=form.base_price_halalas,
+                enabled=form.enabled,
+                confirm=form.confirm,
+                allow_activation=get_settings().service_activation_enabled,
+            )
+        except ServiceNotFound as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except ServiceRevisionConflict as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except ServiceUpdateRejected as exc:
+            raise HTTPException(422, str(exc)) from exc
 
 
 @router.get("/attention")
