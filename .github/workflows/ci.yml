@@ -53,7 +53,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: cp .env.example .env
       - run: docker compose config --quiet
-      - run: docker compose up -d --build --wait db redis object-storage storage-init migrate api worker web caddy
+      - run: docker compose up -d --build --wait db redis object-storage migrate api worker web caddy
       - run: curl --fail http://localhost/api/health/ready
       - run: curl --fail http://localhost/api/health/live
       - run: curl --fail http://localhost/web-health

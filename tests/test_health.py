@@ -20,8 +20,8 @@ async def test_readiness_fails_closed_when_database_is_down(
 
     monkeypatch.setattr(main.asyncpg, "connect", connect)
     main.app.state.redis = AsyncMock()
-    main.app.state.http = AsyncMock()
-    main.app.state.http.get.return_value.status_code = 200
+    main.app.state.storage = AsyncMock()
+    main.app.state.storage.head_bucket = lambda **kwargs: {"ResponseMetadata": {"HTTPStatusCode": 200}}
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=main.app), base_url="http://test"
     ) as client:

@@ -1,15 +1,18 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from uuid import uuid4
 
 import asyncpg
-import httpx
+import boto3
+from botocore.config import Config
+from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from redis.asyncio import Redis
-
 from platform_core.config import get_settings
 from platform_core.logging import configure_logging
+from redis.asyncio import Redis
+from redis.exceptions import RedisError
 
 settings = get_settings()
 configure_logging(settings.log_level)
@@ -19,9 +22,15 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     application.state.redis = Redis.from_url(settings.redis_url)
-    application.state.http = httpx.AsyncClient(timeout=3)
+    application.state.storage = boto3.client(
+        "s3",
+        endpoint_url=settings.object_storage_endpoint,
+        aws_access_key_id=settings.object_storage_access_key,
+        aws_secret_access_key=settings.object_storage_secret_key,
+        region_name=settings.object_storage_region,
+        config=Config(s3={"addressing_style": "path"}, connect_timeout=2, read_timeout=2, retries={"max_attempts": 0}),
+    )
     yield
-    await application.state.http.aclose()
     await application.state.redis.aclose()
 
 
@@ -56,19 +65,23 @@ async def ready(request: Request):
             checks["database"] = "ok"
         finally:
             await conn.close()
-    except Exception:
+    except (asyncpg.PostgresError, OSError, TimeoutError):
+        logger.warning("database_health_failed", exc_info=True)
         checks["database"] = "unavailable"
     try:
         await request.app.state.redis.ping()
         checks["redis"] = "ok"
-    except Exception:
+    except (RedisError, OSError, TimeoutError):
+        logger.warning("redis_health_failed", exc_info=True)
         checks["redis"] = "unavailable"
     try:
-        response = await request.app.state.http.get(
-            f"{settings.object_storage_endpoint}/minio/health/ready"
+        await asyncio.wait_for(
+            asyncio.to_thread(request.app.state.storage.head_bucket, Bucket=settings.object_storage_bucket),
+            timeout=4,
         )
-        checks["object_storage"] = "ok" if response.status_code == 200 else "unavailable"
-    except Exception:
+        checks["object_storage"] = "ok"
+    except (BotoCoreError, ClientError, OSError, TimeoutError):
+        logger.warning("object_storage_health_failed", exc_info=True)
         checks["object_storage"] = "unavailable"
     healthy = all(value == "ok" for value in checks.values())
     return JSONResponse({"status": "ok" if healthy else "unavailable", "checks": checks},

@@ -12,7 +12,7 @@ def main() -> int:
     try:
         with urlopen(target, timeout=3) as response:
             return 0 if response.status == 200 else 1
-    except Exception:
+    except (OSError, TimeoutError, ValueError):
         return 1
 
 

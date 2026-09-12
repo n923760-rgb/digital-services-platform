@@ -9,5 +9,6 @@ node_modules/
 *.tsbuildinfo
 *.egg-info/
 dist/
+build/
 coverage/
 *.log
