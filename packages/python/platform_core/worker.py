@@ -20,6 +20,7 @@ from platform_core.delivery import (
 from platform_core.files import FileUnavailable, InvalidFile, cleanup_expired_files
 from platform_core.jobs import claim_job, complete_job, fail_job, pending_jobs, recover_stale_jobs
 from platform_core.logging import configure_logging
+from platform_core.pdf_isolation import PDFProcessorUnavailable
 from platform_core.pdf_merge import InvalidPDF
 from platform_core.processors import PROCESSORS
 from platform_core.storage_s3 import S3Storage
@@ -156,6 +157,9 @@ async def process_job(ctx, job_id: str) -> None:
         except (InvalidPDF, InvalidFile, FileUnavailable, ValueError):
             logger.exception("service_input_invalid", extra={"job_id": job_id})
             await fail_job(connection, claim, "INVALID_INPUT", retryable=False)
+        except PDFProcessorUnavailable:
+            logger.exception("pdf_processor_unavailable", extra={"job_id": job_id})
+            await fail_job(connection, claim, "PDF_PROCESSOR_UNAVAILABLE", retryable=True)
         except Exception:
             logger.exception("service_processing_failed", extra={"job_id": job_id})
             await fail_job(connection, claim, "PROCESSING_ERROR", retryable=True)
@@ -165,6 +169,7 @@ async def process_job(ctx, job_id: str) -> None:
 
 class WorkerSettings:
     functions: ClassVar[list] = [process_job]
+    max_jobs = 1
     cron_jobs: ClassVar[list] = [
         cron(worker_heartbeat, second={0, 30}),
         cron(dispatch_pending, second={5, 35}),

@@ -1,6 +1,7 @@
 """Proof of the internal file → wallet → order → job → quality → delivery flow."""
 
 import os
+import subprocess
 from io import BytesIO
 from types import SimpleNamespace
 from uuid import uuid4
@@ -17,6 +18,8 @@ from platform_core.files import upload_file
 from platform_core.jobs import claim_job, complete_job, fail_job
 from platform_core.ledger import Balance, IdempotencyConflict, balance, credit
 from platform_core.orders import acknowledge_delivery, confirm_order, ensure_telegram_user
+from platform_core import pdf_isolation
+from platform_core.pdf_isolation import MAX_INPUT_BYTES, merge_pdfs_isolated
 from platform_core.pdf_merge import InvalidPDF, merge_pdfs
 from platform_core.processors import process_pdf_merge
 from pypdf import PdfReader, PdfWriter
@@ -69,6 +72,26 @@ def test_deterministic_pdf_merge_checks_pages_and_rejects_bad_input():
         merge_pdfs([blank_pdf(100), b"%PDF-not-a-real-file"])
     with pytest.raises(InvalidPDF):
         merge_pdfs([blank_pdf(100)])
+
+
+def test_pdf_merge_process_is_separate_bounded_and_rejects_bad_data(monkeypatch):
+    monkeypatch.setenv("PAYMENT_SECRET_IN_PARENT", "not-for-pdf-child")
+    actual_popen = subprocess.Popen
+    observed = []
+
+    def capture_child(*args, **kwargs):
+        observed.append(kwargs)
+        return actual_popen(*args, **kwargs)
+
+    monkeypatch.setattr(pdf_isolation.subprocess, "Popen", capture_child)
+    result = merge_pdfs_isolated([blank_pdf(100), blank_pdf(200)])
+    assert len(PdfReader(BytesIO(result)).pages) == 2
+    assert "PAYMENT_SECRET_IN_PARENT" not in observed[0]["env"]
+    assert observed[0]["close_fds"] and observed[0]["start_new_session"]
+    with pytest.raises(InvalidPDF):
+        merge_pdfs_isolated([blank_pdf(), b"%PDF-corrupted"])
+    with pytest.raises(InvalidPDF):
+        merge_pdfs_isolated([b"%PDF-" + b"x" * MAX_INPUT_BYTES, blank_pdf()])
 
 
 @pytest.fixture
