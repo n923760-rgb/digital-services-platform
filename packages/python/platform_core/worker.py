@@ -4,10 +4,19 @@ from urllib.parse import urlparse
 
 import asyncpg
 import boto3
+from aiogram import Bot
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from arq.connections import RedisSettings
 from arq.cron import cron
 
+from apps.telegram_bot.delivery import send_result
 from platform_core.config import get_settings
+from platform_core.delivery import (
+    claim_delivery,
+    fail_delivery,
+    finish_delivery,
+    recover_stale_deliveries,
+)
 from platform_core.files import FileUnavailable, InvalidFile, cleanup_expired_files
 from platform_core.jobs import claim_job, complete_job, fail_job, pending_jobs, recover_stale_jobs
 from platform_core.logging import configure_logging
@@ -44,6 +53,53 @@ async def recover_processing(ctx) -> None:
         recovered = await recover_stale_jobs(connection)
         if recovered:
             logger.warning("stale_jobs_recovered", extra={"count": recovered})
+    finally:
+        await connection.close()
+
+
+async def dispatch_deliveries(ctx) -> None:
+    connection = await asyncpg.connect(settings.database_url.replace("+asyncpg", ""))
+    bot = None
+    try:
+        for _ in range(10):
+            claim = await claim_delivery(connection)
+            if claim is None:
+                break
+            if not settings.telegram_bot_token:
+                logger.error("delivery_token_missing", extra={"order_id": str(claim.order_id)})
+                await fail_delivery(connection, claim, "TELEGRAM_NOT_CONFIGURED", retryable=False)
+                continue
+            if bot is None:
+                bot = Bot(token=settings.telegram_bot_token)
+            try:
+                storage = S3Storage(boto3.client(
+                    "s3", endpoint_url=settings.object_storage_endpoint,
+                    aws_access_key_id=settings.object_storage_access_key,
+                    aws_secret_access_key=settings.object_storage_secret_key,
+                    region_name=settings.object_storage_region,
+                ))
+                receipt = await send_result(
+                    bot, connection, storage, settings.object_storage_bucket, claim,
+                )
+                await finish_delivery(connection, claim, receipt)
+            except (FileUnavailable, TelegramBadRequest, TelegramForbiddenError, ValueError):
+                logger.exception("delivery_permanent_failure", extra={"order_id": str(claim.order_id)})
+                await fail_delivery(connection, claim, "DELIVERY_REJECTED", retryable=False)
+            except Exception:
+                logger.exception("delivery_transient_failure", extra={"order_id": str(claim.order_id)})
+                await fail_delivery(connection, claim, "DELIVERY_ERROR", retryable=True)
+    finally:
+        if bot is not None:
+            await bot.session.close()
+        await connection.close()
+
+
+async def recover_deliveries(ctx) -> None:
+    connection = await asyncpg.connect(settings.database_url.replace("+asyncpg", ""))
+    try:
+        recovered = await recover_stale_deliveries(connection)
+        if recovered:
+            logger.warning("stale_deliveries_recovered", extra={"count": recovered})
     finally:
         await connection.close()
 
@@ -113,6 +169,8 @@ class WorkerSettings:
         cron(worker_heartbeat, second={0, 30}),
         cron(dispatch_pending, second={5, 35}),
         cron(recover_processing, second={15, 45}),
+        cron(dispatch_deliveries, second={10, 40}),
+        cron(recover_deliveries, second={25, 55}),
         cron(cleanup_files, minute={0}, second={20}),
     ]
     job_timeout = 120

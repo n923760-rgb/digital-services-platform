@@ -114,6 +114,11 @@ async def complete_job(
         )
         if not valid:
             raise ValueError("validated output file is not ready")
+        channel = await connection.fetchval(
+            "SELECT channel FROM orders WHERE id=$1", claim.order_id,
+        )
+        if channel != "telegram":
+            raise ValueError("delivery channel unavailable")
         await connection.execute(
             """UPDATE job_attempts SET status='COMPLETED',completed_at=now()
                WHERE job_id=$1 AND attempt_number=$2 AND status='PROCESSING'""",
@@ -126,6 +131,11 @@ async def complete_job(
         )
         await connection.execute(
             "UPDATE orders SET status='AWAITING_FULFILLMENT' WHERE id=$1", claim.order_id,
+        )
+        await connection.execute(
+            """INSERT INTO delivery_outbox (id,order_id,channel,status)
+               VALUES ($1,$2,'telegram','PENDING')""",
+            uuid4(), claim.order_id,
         )
 
 

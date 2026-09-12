@@ -2,10 +2,17 @@
 
 import os
 from io import BytesIO
+from types import SimpleNamespace
 from uuid import uuid4
 
 import asyncpg
 import pytest
+from platform_core.delivery import (
+    claim_delivery,
+    fail_delivery,
+    finish_delivery,
+    recover_stale_deliveries,
+)
 from platform_core.files import upload_file
 from platform_core.jobs import claim_job, complete_job, fail_job
 from platform_core.ledger import Balance, IdempotencyConflict, balance, credit
@@ -13,6 +20,8 @@ from platform_core.orders import acknowledge_delivery, confirm_order, ensure_tel
 from platform_core.pdf_merge import InvalidPDF, merge_pdfs
 from platform_core.processors import process_pdf_merge
 from pypdf import PdfReader, PdfWriter
+
+from apps.telegram_bot.delivery import send_result
 
 
 class MemoryStorage:
@@ -31,6 +40,15 @@ class MemoryStorage:
         if Key not in self.objects:
             raise FileNotFoundError(Key)
         return self.objects[Key][:MaxBytes + 1]
+
+
+class FakeBot:
+    def __init__(self):
+        self.sent = []
+
+    async def send_document(self, *, chat_id, document, caption):
+        self.sent.append((chat_id, document.data, caption))
+        return SimpleNamespace(message_id=42)
 
 
 def blank_pdf(width=100):
@@ -109,8 +127,15 @@ async def test_pdf_merge_waits_for_delivery_before_capture(db, setup_order):
     assert await balance(db, user_id) == Balance(300, 700)
     output_key = await db.fetchval("SELECT storage_key FROM files WHERE id=$1", output_id)
     assert len(PdfReader(BytesIO(storage.objects[output_key])).pages) == 2
-    await acknowledge_delivery(db, user_id, order_id, "telegram:123")
-    await acknowledge_delivery(db, user_id, order_id, "telegram:123")
+    delivery = await claim_delivery(db)
+    assert delivery.order_id == order_id
+    bot = FakeBot()
+    receipt = await send_result(bot, db, storage, "test", delivery)
+    assert receipt == f"telegram:{delivery.telegram_user_id}:42"
+    assert len(PdfReader(BytesIO(bot.sent[0][1])).pages) == 2
+    await finish_delivery(db, delivery, receipt)
+    assert await claim_delivery(db) is None
+    await acknowledge_delivery(db, user_id, order_id, receipt)
     with pytest.raises(IdempotencyConflict):
         await acknowledge_delivery(db, user_id, order_id, "telegram:another")
     assert await db.fetchval("SELECT status FROM orders WHERE id=$1", order_id) == "COMPLETED"
@@ -152,3 +177,54 @@ async def test_input_guard_rejects_cross_user_file_without_charging(db, setup_or
         await confirm_order(db, other_user, service_id, "foreign-inputs", file_ids=files)
     assert await db.fetchval("SELECT count(*) FROM orders WHERE user_id=$1", other_user) == 0
     assert await balance(db, other_user) == Balance(700, 0)
+
+
+@pytest.mark.asyncio
+async def test_delivery_retries_then_releases_on_exhaustion(db, setup_order):
+    user_id, service_id, storage, files = setup_order
+    await credit(db, user_id, 700, "payment:test")
+    order_id = await confirm_order(db, user_id, service_id, "delivery-retry", file_ids=files)
+    job_id = await db.fetchval("SELECT id FROM jobs WHERE order_id=$1", order_id)
+    claim = await claim_job(db, job_id)
+    output_id = await process_pdf_merge(
+        db, storage, "test", order_id, max_upload_bytes=20 * 1024 * 1024, retention_days=30,
+    )
+    await complete_job(db, claim, output_id)
+    for number in (1, 2, 3):
+        delivery = await claim_delivery(db)
+        assert delivery.attempt_number == number
+        assert await claim_delivery(db) is None
+        assert await fail_delivery(db, delivery, "NETWORK", retryable=True) is (number == 3)
+        await db.execute(
+            "UPDATE delivery_outbox SET next_attempt_at=now()-interval '1 second' WHERE id=$1",
+            delivery.id,
+        )
+    assert await db.fetchval("SELECT status FROM orders WHERE id=$1", order_id) == "FAILED"
+    assert await db.fetchval(
+        "SELECT status FROM delivery_outbox WHERE order_id=$1", order_id,
+    ) == "FAILED"
+    assert await balance(db, user_id) == Balance(700, 0)
+    assert await claim_delivery(db) is None
+
+
+@pytest.mark.asyncio
+async def test_stale_delivery_is_retried_without_capture(db, setup_order):
+    user_id, service_id, storage, files = setup_order
+    await credit(db, user_id, 700, "payment:test")
+    order_id = await confirm_order(db, user_id, service_id, "delivery-stale", file_ids=files)
+    job_id = await db.fetchval("SELECT id FROM jobs WHERE order_id=$1", order_id)
+    claim = await claim_job(db, job_id)
+    output_id = await process_pdf_merge(
+        db, storage, "test", order_id, max_upload_bytes=20 * 1024 * 1024, retention_days=30,
+    )
+    await complete_job(db, claim, output_id)
+    delivery = await claim_delivery(db)
+    await db.execute(
+        "UPDATE delivery_outbox SET claimed_at=now()-interval '4 minutes' WHERE id=$1",
+        delivery.id,
+    )
+    assert await recover_stale_deliveries(db) >= 1
+    assert await balance(db, user_id) == Balance(0, 700)
+    assert await db.fetchval(
+        "SELECT status FROM delivery_outbox WHERE id=$1", delivery.id,
+    ) == "PENDING"
