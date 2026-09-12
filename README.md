@@ -1,0 +1,36 @@
+# Digital Services Platform — FOUNDATION-001
+
+Independent modular-monolith foundation for the approved Saudi digital services platform. The project name and domain are deliberately provisional. Business operations are not enabled yet.
+
+## Local startup
+
+Requirements: Docker with Compose V2. Port 80 must be available.
+
+```bash
+cp .env.example .env
+docker compose up -d --build --wait db redis object-storage storage-init migrate api worker web caddy
+curl --fail http://localhost/api/health/ready
+curl --fail http://localhost/web-health
+```
+
+Check `docker compose ps` and `docker compose logs api worker` for service status. The database migration runs to completion before the API starts. The temporary object store is initialized before API readiness.
+
+For Telegram, set a valid `TELEGRAM_BOT_TOKEN` in `.env`, then run `docker compose --profile telegram up -d --build telegram-bot`. `/start` responds with a clear foundation-stage message; no paid orders are accepted yet. Keep the bot token secret. To avoid webhook/polling conflicts, only one bot instance should poll a token.
+
+To run the Python checks locally, use Python 3.12 and `pip install -e '.[dev]'`, then `ruff check apps packages tests migrations`, `pytest -q`, and `alembic upgrade head` against a test PostgreSQL database. For the web app, use Node 22, run `npm install`, `npm run typecheck`, and `npm run build` inside `apps/web`.
+
+## Layout
+
+- `apps/api`: FastAPI HTTP transport and readiness probes.
+- `apps/telegram_bot`: aiogram channel entrypoint, no business logic.
+- `apps/web`: Next.js Arabic RTL foundation, no admin data exposed.
+- `packages/python/platform_core`: settings, logging, worker and health utilities.
+- `migrations`: Alembic revision history.
+- `infrastructure/caddy`: reverse proxy configuration.
+- `docs`: architecture decisions and milestone acceptance.
+
+## Deployment notes
+
+For a public domain, set `SITE_ADDRESS` to the domain and point DNS to the host; Caddy obtains TLS certificates when reachable. Replace every demonstration password and object-storage credential. Never commit `.env`. The example PostgreSQL, Redis and MinIO services have private Compose networking only; Caddy is the sole public entrypoint. Set up durable backup and restore procedures before production. The V1 production checklist in the approved specification remains mandatory.
+
+The Digital Store is a separate product and does not share this wallet, orders, or database. No store integration is included in FOUNDATION-001.
