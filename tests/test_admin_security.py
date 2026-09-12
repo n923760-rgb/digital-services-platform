@@ -8,8 +8,6 @@ import asyncpg
 import httpx
 import pytest
 
-from apps.api import admin as admin_api
-from apps.api.main import app
 from platform_core.admin_auth import (
     authenticate,
     create_admin,
@@ -19,6 +17,9 @@ from platform_core.admin_auth import (
     revoke_session,
     token_digest,
 )
+
+from apps.api import admin as admin_api
+from apps.api.main import app
 
 
 @pytest.fixture

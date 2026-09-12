@@ -6,9 +6,6 @@ from urllib.parse import urlsplit
 
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel
-from redis.exceptions import RedisError
-
 from platform_core.admin_auth import (
     AdminIdentity,
     authenticate,
@@ -18,6 +15,8 @@ from platform_core.admin_auth import (
     revoke_session,
 )
 from platform_core.config import get_settings
+from pydantic import BaseModel
+from redis.exceptions import RedisError
 
 router = APIRouter(prefix="/api/admin")
 COOKIE_NAME = "platform_admin_session"
@@ -55,7 +54,10 @@ async def identity(request: Request) -> AdminIdentity:
     return admin
 
 
-async def require_view(admin: AdminIdentity = Depends(identity)) -> AdminIdentity:
+AUTH_DEPENDENCY = Depends(identity)
+
+
+async def require_view(admin: AdminIdentity = AUTH_DEPENDENCY) -> AdminIdentity:
     async with database() as db:
         allowed = await has_permission(db, admin, "admin:view")
     if not allowed:
@@ -63,12 +65,16 @@ async def require_view(admin: AdminIdentity = Depends(identity)) -> AdminIdentit
     return admin
 
 
-async def require_audit(admin: AdminIdentity = Depends(identity)) -> AdminIdentity:
+async def require_audit(admin: AdminIdentity = AUTH_DEPENDENCY) -> AdminIdentity:
     async with database() as db:
         allowed = await has_permission(db, admin, "admin:audit")
     if not allowed:
         raise HTTPException(403, "Access denied")
     return admin
+
+
+VIEW_DEPENDENCY = Depends(require_view)
+AUDIT_DEPENDENCY = Depends(require_audit)
 
 
 @router.post("/login")
@@ -100,7 +106,7 @@ async def login(request: Request, form: LoginForm, response: Response):
 
 
 @router.post("/logout")
-async def logout(request: Request, response: Response, admin: AdminIdentity = Depends(identity)):
+async def logout(request: Request, response: Response, admin: AdminIdentity = AUTH_DEPENDENCY):
     check_origin(request)
     async with database() as db:
         await revoke_session(db, request.cookies[COOKIE_NAME], admin)
@@ -110,12 +116,12 @@ async def logout(request: Request, response: Response, admin: AdminIdentity = De
 
 
 @router.get("/me")
-async def me(admin: AdminIdentity = Depends(require_view)):
+async def me(admin: AdminIdentity = VIEW_DEPENDENCY):
     return {"username": admin.username, "role": admin.role_code}
 
 
 @router.get("/overview")
-async def overview(_admin: AdminIdentity = Depends(require_view)):
+async def overview(_admin: AdminIdentity = VIEW_DEPENDENCY):
     async with database() as db:
         row = await db.fetchrow("""SELECT
           (SELECT count(*) FROM orders WHERE created_at >= CURRENT_DATE) AS orders_today,
@@ -128,7 +134,7 @@ async def overview(_admin: AdminIdentity = Depends(require_view)):
 
 
 @router.get("/orders")
-async def orders(_admin: AdminIdentity = Depends(require_view)):
+async def orders(_admin: AdminIdentity = VIEW_DEPENDENCY):
     async with database() as db:
         rows = await db.fetch("""SELECT o.id,o.status,o.channel,o.price_snapshot_halalas,
           o.currency,o.created_at,s.name_ar AS service_name,
@@ -139,7 +145,7 @@ async def orders(_admin: AdminIdentity = Depends(require_view)):
 
 
 @router.get("/audit")
-async def audit_events(_admin: AdminIdentity = Depends(require_audit)):
+async def audit_events(_admin: AdminIdentity = AUDIT_DEPENDENCY):
     async with database() as db:
         rows = await db.fetch("""SELECT l.id,l.action,l.reason,l.created_at,a.username
           FROM audit_logs l JOIN admins a ON a.id=l.actor_admin_id
