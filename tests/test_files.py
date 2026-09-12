@@ -33,6 +33,11 @@ class FakeStorage:
             raise FileNotFoundError(Key)
         return {"ContentLength": len(self.objects[Key])}
 
+    def read_object(self, *, Bucket, Key, MaxBytes):
+        if Key not in self.objects:
+            raise FileNotFoundError(Key)
+        return self.objects[Key][:MaxBytes + 1]
+
     def delete_object(self, *, Bucket, Key):
         self.objects.pop(Key, None)
 

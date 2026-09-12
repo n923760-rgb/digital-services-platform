@@ -1,6 +1,6 @@
 # Digital Services Platform — FOUNDATION-001
 
-Independent modular-monolith foundation for the approved Saudi digital services platform. The project name and domain are deliberately provisional. Business operations are not enabled yet. The internal CORE-001 [financial and order kernel](docs/CORE-001.md) is under development; it does not accept live orders.
+Independent modular-monolith foundation for the approved Saudi digital services platform. The project name and domain are deliberately provisional. Business operations are not enabled yet. The internal CORE-001 [PDF merge and financial workflow](docs/CORE-001.md) is under development; it does not accept live orders.
 
 ## Local startup
 

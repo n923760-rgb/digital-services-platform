@@ -12,6 +12,7 @@ import asyncpg
 
 class Storage(Protocol):
     def put_object(self, *, Bucket: str, Key: str, Body: bytes, ContentType: str) -> object: ...
+    def read_object(self, *, Bucket: str, Key: str, MaxBytes: int) -> bytes: ...
     def head_object(self, *, Bucket: str, Key: str) -> object: ...
     def delete_object(self, *, Bucket: str, Key: str) -> object: ...
 
@@ -60,6 +61,10 @@ async def upload_file(
     mime = identify(data, file_name, claimed_mime, limit)
     if file_type not in {"INPUT", "OUTPUT"} or not 1 <= retention_days <= 3650:
         raise InvalidFile("invalid retention or file type")
+    if order_id is not None:
+        owner = await connection.fetchval("SELECT user_id FROM orders WHERE id=$1", order_id)
+        if owner != owner_user_id:
+            raise InvalidFile("file order does not belong to owner")
     file_id = uuid4()
     key = f"users/{owner_user_id}/{file_id}{PurePosixPath(file_name).suffix.lower()}"
     expires = datetime.now(UTC) + timedelta(days=retention_days)
@@ -102,6 +107,23 @@ async def verify_file(
     if response["ContentLength"] != row["size_bytes"]:
         raise FileUnavailable("stored object size differs from metadata")
     return FileRecord(file_id, row["storage_key"], row["mime_type"], row["size_bytes"])
+
+
+async def read_file(
+    connection: asyncpg.Connection, storage: Storage, bucket: str,
+    owner_user_id: UUID, file_id: UUID,
+) -> bytes:
+    record = await verify_file(connection, storage, bucket, owner_user_id, file_id)
+    try:
+        data = await asyncio.to_thread(
+            storage.read_object, Bucket=bucket, Key=record.storage_key,
+            MaxBytes=record.size_bytes,
+        )
+    except FileNotFoundError as exc:
+        raise FileUnavailable("object missing from storage") from exc
+    if len(data) != record.size_bytes:
+        raise FileUnavailable("stored object changed during download")
+    return data
 
 
 async def cleanup_expired_files(connection: asyncpg.Connection, storage: Storage, bucket: str) -> int:

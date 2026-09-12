@@ -94,6 +94,41 @@ async def fail_job(
         return exhausted
 
 
+async def complete_job(
+    connection: asyncpg.Connection, claim: Claim, result_file_id: UUID,
+) -> None:
+    """Move validated output to delivery queue; capture only after actual delivery."""
+    async with connection.transaction():
+        row = await connection.fetchrow(
+            """SELECT j.status,j.attempt_count,o.user_id FROM jobs j
+               JOIN orders o ON o.id=j.order_id WHERE j.id=$1 AND j.order_id=$2
+               FOR UPDATE OF j,o""",
+            claim.job_id, claim.order_id,
+        )
+        if not row or row["status"] != "PROCESSING" or row["attempt_count"] != claim.attempt_number:
+            raise ValueError("attempt no longer active")
+        valid = await connection.fetchval(
+            """SELECT 1 FROM files WHERE id=$1 AND owner_user_id=$2 AND order_id=$3
+               AND file_type='OUTPUT' AND status='READY' AND retention_until>now()""",
+            result_file_id, row["user_id"], claim.order_id,
+        )
+        if not valid:
+            raise ValueError("validated output file is not ready")
+        await connection.execute(
+            """UPDATE job_attempts SET status='COMPLETED',completed_at=now()
+               WHERE job_id=$1 AND attempt_number=$2 AND status='PROCESSING'""",
+            claim.job_id, claim.attempt_number,
+        )
+        await connection.execute(
+            """UPDATE jobs SET status='COMPLETED',result_file_id=$2,completed_at=now()
+               WHERE id=$1""",
+            claim.job_id, result_file_id,
+        )
+        await connection.execute(
+            "UPDATE orders SET status='AWAITING_FULFILLMENT' WHERE id=$1", claim.order_id,
+        )
+
+
 async def recover_stale_jobs(connection: asyncpg.Connection, timeout_seconds: int = 300) -> int:
     """Retry expired processing attempts; exhausted attempts release held funds."""
     if timeout_seconds < 180:
