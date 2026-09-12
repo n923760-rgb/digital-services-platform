@@ -17,7 +17,9 @@ Check `docker compose ps` and `docker compose logs api worker` for service statu
 
 For Telegram, set a valid `TELEGRAM_BOT_TOKEN` in `.env`, then run `docker compose --profile telegram up -d --build telegram-bot`. `/start` responds with a clear foundation-stage message; no paid orders are accepted yet. Keep the bot token secret. To avoid webhook/polling conflicts, only one bot instance should poll a token.
 
-The PDF merge conversation is persisted in PostgreSQL but remains **off by default** (`TELEGRAM_ORDERS_ENABLED=false`). The flag alone does not make a production service safe: an enabled registry entry, authorized wallet funding, isolated PDF processing, admin access and operational controls are still required. Never enable public uploads against the bundled development S3 emulator.
+The PDF merge conversation is persisted in PostgreSQL but remains **off by default** (`TELEGRAM_ORDERS_ENABLED=false`). The flag alone does not make a production service safe: an enabled registry entry, authorized wallet funding, isolated PDF processing and operational controls are still required. Never enable public uploads against the bundled development S3 emulator.
+
+To create the first administrator after migrations, use an interactive terminal: `docker compose exec -it api python -m platform_core.admin_bootstrap`. Enter a unique username and a password of at least 12 characters at the prompts. The command refuses to create another owner after the first one exists. Visit `/admin` for the read-only dashboard. OWNER can view the audit API; OPERATOR can view operational data but cannot view audit events. Administrative write operations are not yet exposed. For local HTTP only, set `ADMIN_COOKIE_SECURE=false` in your untracked `.env` before starting the API; always keep it `true` with HTTPS in production. The admin session lasts up to 12 hours, and the login endpoint requires a matching browser Origin and Redis rate limiting.
 
 To run the Python checks locally, use Python 3.12 and `pip install -e '.[dev]'`, then `ruff check apps packages tests migrations`, `alembic upgrade head`, and `pytest -q` against a dedicated test PostgreSQL database. For the web app, use Node 22, run `npm install`, `npm run typecheck`, and `npm run build` inside `apps/web`.
 
@@ -25,7 +27,7 @@ To run the Python checks locally, use Python 3.12 and `pip install -e '.[dev]'`,
 
 - `apps/api`: FastAPI HTTP transport and readiness probes.
 - `apps/telegram_bot`: aiogram channel entrypoint, no business logic.
-- `apps/web`: Next.js Arabic RTL foundation, no admin data exposed.
+- `apps/web`: Next.js Arabic RTL foundation and authenticated read-only admin dashboard.
 - `packages/python/platform_core`: settings, logging, worker and health utilities.
 - `docs/FILES.md`: internal file validation and retention contract.
 - `migrations`: Alembic revision history.
