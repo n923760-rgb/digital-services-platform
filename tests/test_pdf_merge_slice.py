@@ -192,6 +192,33 @@ async def test_invalid_pdf_releases_full_reservation(db, setup_order):
 
 
 @pytest.mark.asyncio
+async def test_active_pdf_releases_reservation_without_creating_output(db, setup_order):
+    user_id, service_id, storage, files = setup_order
+    writer = PdfWriter()
+    writer.add_blank_page(width=100, height=100)
+    writer.add_js("app.alert('not allowed')")
+    stream = BytesIO()
+    writer.write(stream)
+    writer.close()
+    key = await db.fetchval("SELECT storage_key FROM files WHERE id=$1", files[1])
+    storage.objects[key] = stream.getvalue()
+    await db.execute("UPDATE files SET size_bytes=$2 WHERE id=$1", files[1], len(stream.getvalue()))
+    await credit(db, user_id, 700, "payment:policy")
+    order_id = await confirm_order(db, user_id, service_id, "active-pdf", file_ids=files)
+    claim = await claim_job(db, await db.fetchval("SELECT id FROM jobs WHERE order_id=$1", order_id))
+    with pytest.raises(InvalidPDF):
+        await process_pdf_merge(
+            db, storage, "test", order_id, max_upload_bytes=20 * 1024 * 1024,
+            retention_days=30,
+        )
+    await fail_job(db, claim, "INVALID_INPUT", retryable=False)
+    assert await balance(db, user_id) == Balance(700, 0)
+    assert await db.fetchval(
+        "SELECT count(*) FROM files WHERE order_id=$1 AND file_type='OUTPUT'", order_id,
+    ) == 0
+
+
+@pytest.mark.asyncio
 async def test_input_guard_rejects_cross_user_file_without_charging(db, setup_order):
     _, service_id, _, files = setup_order
     other_user = await ensure_telegram_user(db, uuid4().int % (2**63 - 1) + 1)
