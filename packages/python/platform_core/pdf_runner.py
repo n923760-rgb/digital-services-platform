@@ -19,7 +19,7 @@ def main() -> int:
     if len(sys.argv) < 4:
         return 3
     try:
-        documents = [open(path, "rb").read() for path in sys.argv[2:]]
+        documents = [Path(path).read_bytes() for path in sys.argv[2:]]
         output = merge_pdfs(documents)
         if len(output) > 20 * 1024 * 1024:
             return 2

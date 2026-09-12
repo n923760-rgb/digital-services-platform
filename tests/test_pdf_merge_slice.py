@@ -8,6 +8,7 @@ from uuid import uuid4
 
 import asyncpg
 import pytest
+from platform_core import pdf_isolation
 from platform_core.delivery import (
     claim_delivery,
     fail_delivery,
@@ -18,7 +19,6 @@ from platform_core.files import upload_file
 from platform_core.jobs import claim_job, complete_job, fail_job
 from platform_core.ledger import Balance, IdempotencyConflict, balance, credit
 from platform_core.orders import acknowledge_delivery, confirm_order, ensure_telegram_user
-from platform_core import pdf_isolation
 from platform_core.pdf_isolation import MAX_INPUT_BYTES, merge_pdfs_isolated
 from platform_core.pdf_merge import InvalidPDF, merge_pdfs
 from platform_core.processors import process_pdf_merge
