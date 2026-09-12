@@ -36,6 +36,7 @@ To run the Python checks locally, use Python 3.12 and `pip install -e '.[dev]'`,
 - `infrastructure/caddy`: reverse proxy configuration.
 - `infrastructure/backup`: PostgreSQL snapshot scripts and CI restore check.
 - `docs/BACKUP-RECOVERY.md`: operational backup and recovery procedure.
+- `docs/SERVICE-REGISTRY.md`: audited service administration and activation gate.
 - `docs`: architecture decisions and milestone acceptance.
 
 ## Deployment notes

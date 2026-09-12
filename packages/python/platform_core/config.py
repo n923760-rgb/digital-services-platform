@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     backup_status_path: str = ""
     telegram_bot_token: str = ""
     telegram_orders_enabled: bool = False
+    service_activation_enabled: bool = False
     admin_cookie_secure: bool = True
     log_level: str = "INFO"
 
