@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     object_storage_access_key: str = "test"
     object_storage_secret_key: str = "test"
     object_storage_region: str = "us-east-1"
+    file_retention_days: int = 30
+    max_upload_bytes: int = 20 * 1024 * 1024
     telegram_bot_token: str = ""
     log_level: str = "INFO"
 

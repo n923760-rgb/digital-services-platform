@@ -25,6 +25,7 @@ To run the Python checks locally, use Python 3.12 and `pip install -e '.[dev]'`,
 - `apps/telegram_bot`: aiogram channel entrypoint, no business logic.
 - `apps/web`: Next.js Arabic RTL foundation, no admin data exposed.
 - `packages/python/platform_core`: settings, logging, worker and health utilities.
+- `docs/FILES.md`: internal file validation and retention contract.
 - `migrations`: Alembic revision history.
 - `infrastructure/caddy`: reverse proxy configuration.
 - `docs`: architecture decisions and milestone acceptance.
