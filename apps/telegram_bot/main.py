@@ -8,11 +8,19 @@ from uuid import UUID
 import asyncpg
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart
-from aiogram.types import CallbackQuery, KeyboardButton, Message, ReplyKeyboardMarkup
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    Message,
+    ReplyKeyboardMarkup,
+)
 from platform_core.config import get_settings
 from platform_core.ledger import balance
 from platform_core.logging import configure_logging
 from platform_core.orders import ensure_telegram_user
+from platform_core.service_catalog import available_services
 from platform_core.telegram_workflow import active_workflow
 
 from apps.telegram_bot import pdf_workflow
@@ -93,12 +101,62 @@ async def confirm_callback(callback: CallbackQuery) -> None:
     await pdf_workflow.confirm(callback.message, workflow_id, callback.from_user.id)
 
 
+async def show_catalog(message: Message) -> None:
+    settings = get_settings()
+    if not settings.telegram_orders_enabled:
+        await message.answer("الخدمات قيد التجهيز حاليًا. اكتب طلبك، وسنعلن إتاحتها هنا قريبًا.")
+        return
+    connection = await asyncpg.connect(settings.database_url.replace("+asyncpg", ""))
+    try:
+        services = await available_services(connection)
+    finally:
+        await connection.close()
+    if not services:
+        await message.answer("لا توجد خدمات متاحة حاليًا.")
+        return
+    buttons = [[InlineKeyboardButton(
+        text=f"{service.name_ar[:32]} · {service.price_halalas / 100:.2f} ر.س",
+        callback_data=f"catalog:select:{service.id}",
+    )] for service in services]
+    await message.answer("اختر الخدمة أو اكتب طلبك مباشرة:",
+                         reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+
+
+@dispatcher.callback_query(F.data.startswith("catalog:select:"))
+async def select_service(callback: CallbackQuery) -> None:
+    if not isinstance(callback.message, Message) or callback.message.chat.type != "private":
+        await callback.answer()
+        return
+    try:
+        service_id = UUID(callback.data.removeprefix("catalog:select:"))
+    except (ValueError, AttributeError):
+        await callback.answer("اختيار غير صالح.", show_alert=True)
+        return
+    settings = get_settings()
+    if not settings.telegram_orders_enabled:
+        await callback.answer("الخدمات قيد التجهيز.", show_alert=True)
+        return
+    connection = await asyncpg.connect(settings.database_url.replace("+asyncpg", ""))
+    try:
+        matching = await available_services(connection, service_id=service_id)
+    finally:
+        await connection.close()
+    if not matching:
+        await callback.answer("الخدمة لم تعد متاحة.", show_alert=True)
+        return
+    await callback.answer()
+    if matching[0].slug == "merge-pdf":
+        await pdf_workflow.begin(callback.message, callback.from_user.id)
+
+
 @dispatcher.message(F.text)
 async def text_message(message: Message) -> None:
     if message.chat.type != "private" or message.from_user is None:
         return
     content = message.text.strip().lower()
-    if content == "🔗 دمج pdf" or ("pdf" in content and any(
+    if content in {"✨ الخدمات", "🧰 الأدوات"}:
+        await show_catalog(message)
+    elif content == "🔗 دمج pdf" or ("pdf" in content and any(
         term in content for term in ("ادمج", "دمج", "merge")
     )):
         await pdf_workflow.begin(message)
