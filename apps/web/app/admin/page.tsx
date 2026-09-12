@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 
 type Admin = { username: string; role: string };
-type Overview = { orders_today: number; processing_orders: number; completed_orders: number; failed_orders: number; failed_jobs: number; failed_deliveries: number };
+type Overview = { orders_today: number; processing_orders: number; completed_orders: number; failed_orders: number; failed_jobs: number; failed_deliveries: number; wallet_topups_today: number; failed_payments: number };
 type Order = { id: string; status: string; channel: string; service_name: string; price_snapshot_halalas: number; currency: string; created_at: string; failed_jobs: number };
 
 const currency = (halalas: number) => new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(halalas / 100);
@@ -71,6 +71,7 @@ export default function AdminPage() {
   const metrics: [string, number][] = overview ? [
     ["طلبات اليوم", overview.orders_today], ["قيد التنفيذ", overview.processing_orders],
     ["مكتملة", overview.completed_orders], ["طلبات فاشلة", overview.failed_orders],
+    ["شحن المحفظة اليوم", overview.wallet_topups_today],
   ] : [];
   return <main style={{ maxWidth: 1200, margin: "auto" }}>
     <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
@@ -82,7 +83,7 @@ export default function AdminPage() {
       {metrics.map(([label, value]) => <div key={label} style={card}><div>{label}</div><strong style={{ fontSize: 28 }}>{value}</strong></div>)}
     </section>
     <section style={{ ...card, marginBottom: 24, borderColor: "#bf8738" }}>
-      <h2>تحتاج متابعة</h2><p>مهام فاشلة: {overview?.failed_jobs ?? 0} · تسليمات فاشلة: {overview?.failed_deliveries ?? 0} · طلبات فاشلة: {overview?.failed_orders ?? 0}</p>
+      <h2>تحتاج متابعة</h2><p>مهام فاشلة: {overview?.failed_jobs ?? 0} · تسليمات فاشلة: {overview?.failed_deliveries ?? 0} · طلبات فاشلة: {overview?.failed_orders ?? 0} · دفعات فاشلة: {overview?.failed_payments ?? 0}</p>
     </section>
     <section style={card}><h2>آخر الطلبات</h2><div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", textAlign: "right" }}>
       <thead><tr><th>الطلب</th><th>الخدمة</th><th>الحالة</th><th>القيمة</th><th>التاريخ</th></tr></thead>
