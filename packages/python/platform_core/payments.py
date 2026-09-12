@@ -1,8 +1,9 @@
 """Provider-independent top-up accounting; only a verified adapter may confirm payment."""
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Mapping, Protocol
+from typing import Protocol
 from uuid import UUID, uuid4
 
 import asyncpg
