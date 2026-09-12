@@ -6,14 +6,13 @@ from uuid import uuid4
 
 import asyncpg
 import pytest
-from pypdf import PdfReader, PdfWriter
-
 from platform_core.files import upload_file
 from platform_core.jobs import claim_job, complete_job, fail_job
 from platform_core.ledger import Balance, IdempotencyConflict, balance, credit
 from platform_core.orders import acknowledge_delivery, confirm_order, ensure_telegram_user
 from platform_core.pdf_merge import InvalidPDF, merge_pdfs
 from platform_core.processors import process_pdf_merge
+from pypdf import PdfReader, PdfWriter
 
 
 class MemoryStorage:
@@ -146,7 +145,7 @@ async def test_invalid_pdf_releases_full_reservation(db, setup_order):
 
 @pytest.mark.asyncio
 async def test_input_guard_rejects_cross_user_file_without_charging(db, setup_order):
-    user_id, service_id, _, files = setup_order
+    _, service_id, _, files = setup_order
     other_user = await ensure_telegram_user(db, uuid4().int % (2**63 - 1) + 1)
     await credit(db, other_user, 700, "payment:test")
     with pytest.raises(ValueError, match="input file"):

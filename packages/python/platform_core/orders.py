@@ -61,7 +61,7 @@ async def confirm_order(
         if isinstance(schema, str):
             schema = json.loads(schema)
         if not isinstance(schema, dict):
-            raise ValueError("invalid service input schema")
+            raise TypeError("invalid service input schema type")
         minimum = schema.get("min_files", 0)
         maximum = schema.get("max_files", 0)
         if (type(minimum) is not int or type(maximum) is not int or minimum < 0
