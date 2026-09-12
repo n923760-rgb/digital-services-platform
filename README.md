@@ -1,6 +1,6 @@
 # Digital Services Platform — FOUNDATION-001
 
-Independent modular-monolith foundation for the approved Saudi digital services platform. The project name and domain are deliberately provisional. Business operations are not enabled yet.
+Independent modular-monolith foundation for the approved Saudi digital services platform. The project name and domain are deliberately provisional. Business operations are not enabled yet. The internal CORE-001 [financial and order kernel](docs/CORE-001.md) is under development; it does not accept live orders.
 
 ## Local startup
 
@@ -17,7 +17,7 @@ Check `docker compose ps` and `docker compose logs api worker` for service statu
 
 For Telegram, set a valid `TELEGRAM_BOT_TOKEN` in `.env`, then run `docker compose --profile telegram up -d --build telegram-bot`. `/start` responds with a clear foundation-stage message; no paid orders are accepted yet. Keep the bot token secret. To avoid webhook/polling conflicts, only one bot instance should poll a token.
 
-To run the Python checks locally, use Python 3.12 and `pip install -e '.[dev]'`, then `ruff check apps packages tests migrations`, `pytest -q`, and `alembic upgrade head` against a test PostgreSQL database. For the web app, use Node 22, run `npm install`, `npm run typecheck`, and `npm run build` inside `apps/web`.
+To run the Python checks locally, use Python 3.12 and `pip install -e '.[dev]'`, then `ruff check apps packages tests migrations`, `alembic upgrade head`, and `pytest -q` against a dedicated test PostgreSQL database. For the web app, use Node 22, run `npm install`, `npm run typecheck`, and `npm run build` inside `apps/web`.
 
 ## Layout
 
