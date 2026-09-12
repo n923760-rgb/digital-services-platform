@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     object_storage_region: str = "us-east-1"
     file_retention_days: int = 30
     max_upload_bytes: int = 20 * 1024 * 1024
+    pdf_sandbox_root: str = ""
     telegram_bot_token: str = ""
     telegram_orders_enabled: bool = False
     admin_cookie_secure: bool = True

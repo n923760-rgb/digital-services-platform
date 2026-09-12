@@ -1,0 +1,7 @@
+FROM python:3.12-slim
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PDF_SANDBOX_ROOT=/sandbox-jobs
+WORKDIR /app
+RUN pip install --no-cache-dir 'pypdf>=6,<7'
+COPY packages/python/platform_core/__init__.py packages/python/platform_core/pdf_merge.py packages/python/platform_core/pdf_isolation.py packages/python/platform_core/pdf_runner.py packages/python/platform_core/pdf_sandbox.py /app/platform_core/
+USER 10001:10001
+CMD ["python", "-m", "platform_core.pdf_sandbox"]
