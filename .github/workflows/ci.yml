@@ -30,8 +30,8 @@ jobs:
       - run: pip install -e '.[dev]'
       - run: pip wheel --no-deps -w /tmp/platform-wheels .
       - run: ruff check apps packages tests migrations
-      - run: pytest -q
       - run: alembic upgrade head
+      - run: pytest -q
       - run: alembic current
   web:
     runs-on: ubuntu-latest
