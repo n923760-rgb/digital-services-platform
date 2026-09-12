@@ -48,8 +48,10 @@ services:
     image: postgres:16-alpine
     user: "0:0"
     network_mode: none
-    command: ["sh", "-c", "chown 10001:10001 /backups && chmod 700 /backups"]
-    volumes: [backup_data:/backups]
+    command: ["sh", "-c", "chown 10001:10001 /backups /backup-status && chmod 700 /backups /backup-status"]
+    volumes:
+      - backup_data:/backups
+      - backup_status:/backup-status
     restart: "no"
   backup:
     image: postgres:16-alpine
@@ -66,17 +68,29 @@ services:
       PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
       BACKUP_DIR: /backups
+      BACKUP_STATUS_DIR: /backup-status
     command: ["sh", "/backup-scripts/backup_loop.sh"]
     volumes:
       - backup_data:/backups
+      - backup_status:/backup-status
       - ./infrastructure/backup:/backup-scripts:ro
     depends_on:
       backup-init: {condition: service_completed_successfully}
       migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "sh", "/backup-scripts/check_freshness.sh"]
+      interval: 1m
+      timeout: 5s
+      retries: 3
+      start_period: 2m
   api:
     build: {context: ., dockerfile: Dockerfile.python}
     command: ["uvicorn", "apps.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "127.0.0.1"]
     env_file: .env
+    environment:
+      BACKUP_STATUS_PATH: /backup-status/latest
+    volumes:
+      - backup_status:/backup-status:ro
     restart: unless-stopped
     depends_on:
       migrate: {condition: service_completed_successfully}
@@ -174,3 +188,4 @@ volumes:
   caddy_config:
   pdf_jobs:
   backup_data:
+  backup_status:
