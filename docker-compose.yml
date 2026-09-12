@@ -44,6 +44,35 @@ services:
     restart: "no"
     depends_on:
       db: {condition: service_healthy}
+  backup-init:
+    image: postgres:16-alpine
+    user: "0:0"
+    network_mode: none
+    command: ["sh", "-c", "chown 10001:10001 /backups && chmod 700 /backups"]
+    volumes: [backup_data:/backups]
+    restart: "no"
+  backup:
+    image: postgres:16-alpine
+    user: "10001:10001"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGDATABASE: ${POSTGRES_DB:?Set POSTGRES_DB}
+      PGUSER: ${POSTGRES_USER:?Set POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
+      BACKUP_DIR: /backups
+    command: ["sh", "/backup-scripts/backup_loop.sh"]
+    volumes:
+      - backup_data:/backups
+      - ./infrastructure/backup:/backup-scripts:ro
+    depends_on:
+      backup-init: {condition: service_completed_successfully}
+      migrate: {condition: service_completed_successfully}
   api:
     build: {context: ., dockerfile: Dockerfile.python}
     command: ["uvicorn", "apps.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "127.0.0.1"]
@@ -144,3 +173,4 @@ volumes:
   caddy_data:
   caddy_config:
   pdf_jobs:
+  backup_data:

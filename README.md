@@ -8,7 +8,7 @@ Requirements: Docker with Compose V2. Port 80 must be available.
 
 ```bash
 cp .env.example .env
-docker compose up -d --build --wait db redis object-storage migrate api worker web caddy
+docker compose up -d --build --wait db redis object-storage migrate backup api worker web caddy
 curl --fail http://localhost/api/health/ready
 curl --fail http://localhost/web-health
 ```
@@ -34,10 +34,12 @@ To run the Python checks locally, use Python 3.12 and `pip install -e '.[dev]'`,
 - `docs/FILES.md`: internal file validation and retention contract.
 - `migrations`: Alembic revision history.
 - `infrastructure/caddy`: reverse proxy configuration.
+- `infrastructure/backup`: PostgreSQL snapshot scripts and CI restore check.
+- `docs/BACKUP-RECOVERY.md`: operational backup and recovery procedure.
 - `docs`: architecture decisions and milestone acceptance.
 
 ## Deployment notes
 
-For a public domain, set `SITE_ADDRESS` to the domain and point DNS to the host; Caddy obtains TLS certificates when reachable. Replace every demonstration password and credential. Never commit `.env`. PostgreSQL, Redis and the local S3 emulator have private Compose networking only; Caddy is the sole public entrypoint. **The included S3Mock is for local development and CI only: it must be replaced with a production S3-compatible provider before handling customer files.** Configure `OBJECT_STORAGE_ENDPOINT`, credentials and the pre-created bucket for that provider, and remove the emulator service in the production Compose override. Set up durable backup and restore procedures before production. The V1 production checklist in the approved specification remains mandatory.
+For a public domain, set `SITE_ADDRESS` to the domain and point DNS to the host; Caddy obtains TLS certificates when reachable. Replace every demonstration password and credential. Never commit `.env`. PostgreSQL, Redis and the local S3 emulator have private Compose networking only; Caddy is the sole public entrypoint. **The included S3Mock is for local development and CI only: it must be replaced with a production S3-compatible provider before handling customer files.** Configure `OBJECT_STORAGE_ENDPOINT`, credentials and the pre-created bucket for that provider, and remove the emulator service in the production Compose override. The backup container creates local PostgreSQL snapshots; follow [backup and recovery](docs/BACKUP-RECOVERY.md) to establish encrypted off-host copies and verify recovery before production. The V1 production checklist in the approved specification remains mandatory.
 
 The Digital Store is a separate product and does not share this wallet, orders, or database. No store integration is included in FOUNDATION-001.

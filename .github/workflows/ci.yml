@@ -59,7 +59,14 @@ jobs:
           assert s["network_mode"]=="none" and s["read_only"] is True;
           assert not {"DATABASE_URL","TELEGRAM_BOT_TOKEN","OBJECT_STORAGE_SECRET_KEY"}
           & set(s.get("environment",{}))'
-      - run: docker compose up -d --build --wait db redis object-storage migrate api worker web caddy
+      - run: >-
+          docker compose config --format json |
+          python -c 'import json,sys; s=json.load(sys.stdin)["services"]["backup"];
+          assert s["read_only"] is True and s["user"]=="10001:10001";
+          assert not {"DATABASE_URL","TELEGRAM_BOT_TOKEN","OBJECT_STORAGE_SECRET_KEY"}
+          & set(s["environment"])'
+      - run: docker compose up -d --build --wait db redis object-storage migrate backup api worker web caddy
+      - run: docker compose run --rm -T -e CI_RESTORE_TEST=1 backup sh /backup-scripts/restore_smoke.sh
       - run: docker compose exec -T worker python -m platform_core.pdf_sandbox_smoke
       - run: curl --fail http://localhost/api/health/ready
       - run: curl --fail http://localhost/api/health/live
