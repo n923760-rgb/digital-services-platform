@@ -6,8 +6,6 @@ from uuid import uuid4
 
 import asyncpg
 import pytest
-
-from apps.telegram_bot.pdf_workflow import BoundedBuffer
 from platform_core.files import InvalidFile, upload_file
 from platform_core.ledger import Balance, balance, credit
 from platform_core.orders import ensure_telegram_user
@@ -20,6 +18,8 @@ from platform_core.telegram_workflow import (
     quote_pdf_merge,
     start_pdf_merge,
 )
+
+from apps.telegram_bot.pdf_workflow import BoundedBuffer
 
 
 class MemoryStorage:

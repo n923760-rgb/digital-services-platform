@@ -9,12 +9,13 @@ import asyncpg
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart
 from aiogram.types import CallbackQuery, KeyboardButton, Message, ReplyKeyboardMarkup
-from apps.telegram_bot import pdf_workflow
 from platform_core.config import get_settings
 from platform_core.ledger import balance
 from platform_core.logging import configure_logging
 from platform_core.orders import ensure_telegram_user
 from platform_core.telegram_workflow import active_workflow
+
+from apps.telegram_bot import pdf_workflow
 
 logger = logging.getLogger(__name__)
 dispatcher = Dispatcher()
