@@ -84,9 +84,9 @@ async def merge_command(message: Message) -> None:
 
 @dispatcher.message(Command("cancel"))
 async def cancel_command(message: Message) -> None:
-    if message.chat.type == "private" and message.from_user:
-        if not await custom_request_ui.cancel_if_collecting(message):
-            await pdf_workflow.cancel(message)
+    if (message.chat.type == "private" and message.from_user
+            and not await custom_request_ui.cancel_if_collecting(message)):
+        await pdf_workflow.cancel(message)
 
 
 @dispatcher.message(F.document)
