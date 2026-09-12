@@ -17,13 +17,14 @@ from aiogram.types import (
     ReplyKeyboardMarkup,
 )
 from platform_core.config import get_settings
+from platform_core.custom_requests import draft_user_id
 from platform_core.ledger import balance
 from platform_core.logging import configure_logging
 from platform_core.orders import ensure_telegram_user
 from platform_core.service_catalog import available_services
 from platform_core.telegram_workflow import active_workflow
 
-from apps.telegram_bot import customer_files, pdf_workflow
+from apps.telegram_bot import custom_request_ui, customer_files, pdf_workflow
 
 logger = logging.getLogger(__name__)
 dispatcher = Dispatcher()
@@ -51,10 +52,16 @@ async def start(message: Message) -> None:
     await message.answer(
         "أهلًا 👋\nوش تحتاج أسوي لك؟\n"
         "اكتب طلبك مباشرة، أو أرسل صورة، ملف، رابط أو تسجيل صوتي.\n"
-        "الخدمات قيد التجهيز حاليًا.",
+        "الخدمات الجاهزة قيد التجهيز حاليًا؛ يمكنك إرسال طلب خدمة للمراجعة.",
         reply_markup=merge_keyboard if get_settings().telegram_orders_enabled else keyboard,
     )
     settings = get_settings()
+    connection = await asyncpg.connect(settings.database_url.replace("+asyncpg", ""))
+    try:
+        if await draft_user_id(connection, message.from_user.id):
+            await message.answer("عندك طلب خدمة لم ترسل وصفه بعد. اكتب التفاصيل الآن، أو اكتب «إلغاء».")
+    finally:
+        await connection.close()
     if settings.telegram_orders_enabled:
         connection = await asyncpg.connect(settings.database_url.replace("+asyncpg", ""))
         try:
@@ -78,7 +85,8 @@ async def merge_command(message: Message) -> None:
 @dispatcher.message(Command("cancel"))
 async def cancel_command(message: Message) -> None:
     if message.chat.type == "private" and message.from_user:
-        await pdf_workflow.cancel(message)
+        if not await custom_request_ui.cancel_if_collecting(message):
+            await pdf_workflow.cancel(message)
 
 
 @dispatcher.message(F.document)
@@ -159,18 +167,17 @@ async def text_message(message: Message) -> None:
     if message.chat.type != "private" or message.from_user is None:
         return
     content = message.text.strip().lower()
-    if content in {"✨ الخدمات", "🧰 الأدوات"}:
+    if content == "➕ اطلب خدمة":
+        await custom_request_ui.begin(message)
+    elif content in {"إلغاء", "إلغاء الطلب"}:
+        if not await custom_request_ui.cancel_if_collecting(message):
+            await pdf_workflow.cancel(message)
+    elif content in {"✨ الخدمات", "🧰 الأدوات"}:
         await show_catalog(message)
     elif content == "📁 ملفاتي":
         await customer_files.show_files(message)
-    elif content == "🔗 دمج pdf" or ("pdf" in content and any(
-        term in content for term in ("ادمج", "دمج", "merge")
-    )):
-        await pdf_workflow.begin(message)
     elif content == "✅ مراجعة السعر":
         await pdf_workflow.review(message)
-    elif content in {"إلغاء", "إلغاء الطلب"}:
-        await pdf_workflow.cancel(message)
     elif content == "💰 رصيدي":
         connection = await asyncpg.connect(get_settings().database_url.replace("+asyncpg", ""))
         try:
@@ -184,8 +191,14 @@ async def text_message(message: Message) -> None:
             await connection.close()
     elif content == "🛒 المتجر الرقمي":
         await message.answer("رابط المتجر الرقمي سيتوفر قريبًا.")
+    elif await custom_request_ui.submit_if_collecting(message):
+        return
+    elif content == "🔗 دمج pdf" or ("pdf" in content and any(
+        term in content for term in ("ادمج", "دمج", "merge")
+    )):
+        await pdf_workflow.begin(message)
     else:
-        await message.answer("الخدمات قيد التجهيز. يمكنك تجربة «🔗 دمج PDF» عند تفعيلها.")
+        await message.answer("الخدمات الجاهزة قيد التجهيز. اضغط «➕ اطلب خدمة» لإرسال طلب للمراجعة.")
 
 
 async def heartbeat() -> None:
