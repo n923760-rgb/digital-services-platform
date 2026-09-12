@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     max_upload_bytes: int = 20 * 1024 * 1024
     telegram_bot_token: str = ""
     telegram_orders_enabled: bool = False
+    admin_cookie_secure: bool = True
     log_level: str = "INFO"
 
 

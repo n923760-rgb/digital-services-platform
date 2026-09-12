@@ -14,6 +14,8 @@ from platform_core.logging import configure_logging
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
+from apps.api.admin import router as admin_router
+
 settings = get_settings()
 configure_logging(settings.log_level)
 logger = logging.getLogger(__name__)
@@ -35,6 +37,7 @@ async def lifespan(application: FastAPI):
 
 
 app = FastAPI(title="Digital Services Platform API", lifespan=lifespan, docs_url=None, redoc_url=None)
+app.include_router(admin_router)
 
 
 @app.middleware("http")
