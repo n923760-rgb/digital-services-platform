@@ -31,6 +31,7 @@ async def ensure_telegram_user(connection: asyncpg.Connection, telegram_user_id:
 async def confirm_order(
     connection: asyncpg.Connection, user_id: UUID, service_id: UUID,
     client_request_key: str, channel: str = "telegram", *, file_ids: Sequence[UUID] = (),
+    expected_price_halalas: int | None = None,
 ) -> UUID:
     if not client_request_key.strip() or len(client_request_key) > 160:
         raise ValueError("invalid request key")
@@ -80,6 +81,8 @@ async def confirm_order(
                     or any(row["mime_type"] != expected for row in files)):
                 raise ValueError("input file missing, expired or wrong type")
         price = service["base_price_halalas"]
+        if expected_price_halalas is not None and price != expected_price_halalas:
+            raise ValueError("service price changed; new confirmation required")
         order_id = uuid4()
         await connection.execute(
             """INSERT INTO orders
