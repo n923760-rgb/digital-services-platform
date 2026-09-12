@@ -66,7 +66,7 @@ jobs:
           assert not {"DATABASE_URL","TELEGRAM_BOT_TOKEN","OBJECT_STORAGE_SECRET_KEY"}
           & set(s["environment"])'
       - run: docker compose up -d --build --wait db redis object-storage migrate backup api worker web caddy
-      - run: docker compose run --rm -T -e CI_RESTORE_TEST=1 backup sh /usr/local/bin/restore_smoke.sh
+      - run: docker compose run --rm -T -e CI_RESTORE_TEST=1 backup sh /backup-scripts/restore_smoke.sh
       - run: docker compose exec -T worker python -m platform_core.pdf_sandbox_smoke
       - run: curl --fail http://localhost/api/health/ready
       - run: curl --fail http://localhost/api/health/live

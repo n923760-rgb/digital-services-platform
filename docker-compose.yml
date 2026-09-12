@@ -66,10 +66,10 @@ services:
       PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
       BACKUP_DIR: /backups
-    command: ["sh", "/usr/local/bin/backup_loop.sh"]
+    command: ["sh", "/backup-scripts/backup_loop.sh"]
     volumes:
       - backup_data:/backups
-      - ./infrastructure/backup:/usr/local/bin:ro
+      - ./infrastructure/backup:/backup-scripts:ro
     depends_on:
       backup-init: {condition: service_completed_successfully}
       migrate: {condition: service_completed_successfully}

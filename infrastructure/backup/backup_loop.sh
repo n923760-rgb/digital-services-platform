@@ -2,6 +2,6 @@
 set -eu
 
 while :; do
-    sh /usr/local/bin/backup_once.sh
+    sh /backup-scripts/backup_once.sh
     sleep 86400
 done

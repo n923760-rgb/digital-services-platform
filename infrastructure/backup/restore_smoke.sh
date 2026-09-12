@@ -17,7 +17,7 @@ cleanup() {
 trap cleanup EXIT
 
 psql -v ON_ERROR_STOP=1 -c "INSERT INTO users (id) VALUES ('00000000-0000-4000-8000-000000000001') ON CONFLICT DO NOTHING" > /dev/null
-archive=$(sh /usr/local/bin/backup_once.sh)
+archive=$(sh /backup-scripts/backup_once.sh)
 
 createdb "$restore_database"
 created=1
