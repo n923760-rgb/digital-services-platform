@@ -148,6 +148,31 @@ async def orders(_admin: AdminIdentity = VIEW_DEPENDENCY):
     return [{**dict(row), "id": str(row["id"])} for row in rows]
 
 
+@router.get("/attention")
+async def attention(_admin: AdminIdentity = VIEW_DEPENDENCY):
+    """Bounded operational failures; never return customer input or raw exception messages."""
+    async with database() as db:
+        jobs = await db.fetch("""SELECT j.id,j.order_id,j.error_code,j.attempt_count,
+          j.max_attempts,j.completed_at AS failed_at,s.name_ar AS service_name
+          FROM jobs j JOIN orders o ON o.id=j.order_id
+          JOIN services s ON s.id=o.service_id
+          WHERE j.status='FAILED' ORDER BY j.completed_at DESC NULLS LAST,j.id DESC LIMIT 20""")
+        deliveries = await db.fetch("""SELECT d.id,d.order_id,d.error_code,d.attempt_count,
+          d.max_attempts,d.completed_at AS failed_at,s.name_ar AS service_name
+          FROM delivery_outbox d JOIN orders o ON o.id=d.order_id
+          JOIN services s ON s.id=o.service_id
+          WHERE d.status='FAILED' ORDER BY d.completed_at DESC NULLS LAST,d.id DESC LIMIT 20""")
+        payments = await db.fetch("""SELECT id,provider,amount_halalas,created_at
+          FROM payments WHERE status='FAILED' ORDER BY created_at DESC,id DESC LIMIT 20""")
+    return {
+        "jobs": [{**dict(row), "id": str(row["id"]), "order_id": str(row["order_id"])}
+                 for row in jobs],
+        "deliveries": [{**dict(row), "id": str(row["id"]), "order_id": str(row["order_id"])}
+                       for row in deliveries],
+        "payments": [{**dict(row), "id": str(row["id"])} for row in payments],
+    }
+
+
 @router.get("/audit")
 async def audit_events(_admin: AdminIdentity = AUDIT_DEPENDENCY):
     async with database() as db:
