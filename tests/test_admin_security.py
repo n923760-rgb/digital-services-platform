@@ -7,7 +7,6 @@ from uuid import uuid4
 import asyncpg
 import httpx
 import pytest
-
 from platform_core.admin_auth import (
     authenticate,
     create_admin,
