@@ -3,12 +3,15 @@ from typing import ClassVar
 from urllib.parse import urlparse
 
 import asyncpg
+import boto3
 from arq.connections import RedisSettings
 from arq.cron import cron
 
 from platform_core.config import get_settings
+from platform_core.files import cleanup_expired_files
 from platform_core.jobs import claim_job, fail_job, pending_jobs, recover_stale_jobs
 from platform_core.logging import configure_logging
+from platform_core.storage_s3 import S3Storage
 
 settings = get_settings()
 configure_logging(settings.log_level)
@@ -43,6 +46,24 @@ async def recover_processing(ctx) -> None:
         await connection.close()
 
 
+async def cleanup_files(ctx) -> None:
+    connection = await asyncpg.connect(settings.database_url.replace("+asyncpg", ""))
+    try:
+        client = boto3.client(
+            "s3", endpoint_url=settings.object_storage_endpoint,
+            aws_access_key_id=settings.object_storage_access_key,
+            aws_secret_access_key=settings.object_storage_secret_key,
+            region_name=settings.object_storage_region,
+        )
+        deleted = await cleanup_expired_files(
+            connection, S3Storage(client), settings.object_storage_bucket,
+        )
+        if deleted:
+            logger.info("expired_files_deleted", extra={"count": deleted})
+    finally:
+        await connection.close()
+
+
 async def process_job(ctx, job_id: str) -> None:
     """Fail closed until a validated service processor and delivery exist."""
     from uuid import UUID
@@ -64,6 +85,7 @@ class WorkerSettings:
         cron(worker_heartbeat, second={0, 30}),
         cron(dispatch_pending, second={5, 35}),
         cron(recover_processing, second={15, 45}),
+        cron(cleanup_files, minute={0}, second={20}),
     ]
     job_timeout = 120
     redis_settings = RedisSettings(
