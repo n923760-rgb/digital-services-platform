@@ -2,7 +2,6 @@
 
 import asyncpg
 from aiogram.types import BufferedInputFile
-
 from platform_core.delivery import DeliveryClaim
 from platform_core.files import Storage, read_file
 

@@ -7,7 +7,6 @@ from uuid import uuid4
 
 import asyncpg
 import pytest
-from apps.telegram_bot.delivery import send_result
 from platform_core.delivery import (
     claim_delivery,
     fail_delivery,
@@ -21,6 +20,8 @@ from platform_core.orders import acknowledge_delivery, confirm_order, ensure_tel
 from platform_core.pdf_merge import InvalidPDF, merge_pdfs
 from platform_core.processors import process_pdf_merge
 from pypdf import PdfReader, PdfWriter
+
+from apps.telegram_bot.delivery import send_result
 
 
 class MemoryStorage:
