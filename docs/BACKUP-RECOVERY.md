@@ -1,0 +1,16 @@
+# PostgreSQL backup and recovery
+
+The `backup` Compose service takes a PostgreSQL custom-format `pg_dump` immediately on start, then every 24 hours. It validates the archive table of contents before atomically moving the finished file into the `backup_data` volume. The process runs as an unprivileged user and receives only database and backup settings. Set `BACKUP_RETENTION_DAYS` (default: 7; minimum: 1) in the untracked `.env` file to change local retention. Check `docker compose logs backup` and alert on a stopped or repeatedly restarting container, missing daily snapshots, and low disk space. A failed dump terminates the process; Compose restarts it so a failure is visible and retried.
+
+## Before production
+
+The named volume is on the **same host as PostgreSQL**. It cannot protect against host loss, theft, ransomware or loss of the Compose volumes. Before handling customer data, arrange an encrypted copy of each completed archive to independent off-host storage, protect its credentials separately, restrict read access, monitor transfer failures, set an independent retention policy, and regularly restore an off-host copy to a separate instance. Choose and document the provider and operational retention period for the deployment. Back up critical deployment configuration and secrets in a separate restricted system; do not put secrets or `.env` in Git. Configure versioning and lifecycle/retention for production S3 objects independently: a PostgreSQL snapshot contains file metadata, **not** the uploaded objects.
+
+## Restore procedure (controlled maintenance)
+
+1. Identify the incident time and a matching PostgreSQL archive and object-store recovery point. Stop writes to the affected deployment. Preserve the damaged database for investigation. Never restore blindly over the only remaining copy.
+2. Copy an archive into an isolated PostgreSQL 16 environment with sufficient space. Verify that `pg_restore --list snapshot.dump` succeeds. Use a database account with appropriate create/restore permissions.
+3. Create a **new empty database** and restore with `pg_restore --exit-on-error --no-owner --no-acl --dbname=NEW_DATABASE snapshot.dump`. Check `alembic_version`, critical row counts, application readiness, wallet ledger consistency and the availability of referenced S3 objects. Reconcile any payment events that arrived after the archive was taken before allowing financial writes.
+4. Run application smoke checks against that database in isolation. Only after verifying data and object recovery, plan a controlled cutover, restart workers/channels and monitor failures. Record the recovery point, missing data window, operator and validation results in the incident log.
+
+CI runs `restore_smoke.sh` only in its disposable Compose database. It inserts a marker, creates a fresh archive and restores it to a separate database, then checks the marker and Alembic version. This proves the local dump can be restored; it does **not** prove that off-host storage or a production disaster recovery path works. Practice restoring an actual off-host archive periodically and record its duration.
