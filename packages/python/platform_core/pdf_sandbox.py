@@ -6,7 +6,11 @@ import shutil
 import time
 from pathlib import Path
 
-from platform_core.pdf_isolation import MAX_INPUT_BYTES, PDFProcessorUnavailable, merge_pdfs_isolated
+from platform_core.pdf_isolation import (
+    MAX_INPUT_BYTES,
+    PDFProcessorUnavailable,
+    merge_pdfs_isolated,
+)
 from platform_core.pdf_merge import InvalidPDF
 
 logger = logging.getLogger(__name__)
