@@ -92,3 +92,23 @@ async def fail_job(
                     f"release:{claim.order_id}", kind="RELEASE",
                 )
         return exhausted
+
+
+async def recover_stale_jobs(connection: asyncpg.Connection, timeout_seconds: int = 300) -> int:
+    """Retry expired processing attempts; exhausted attempts release held funds."""
+    if timeout_seconds < 180:
+        raise ValueError("timeout must exceed the ARQ job execution limit")
+    async with connection.transaction():
+        rows = await connection.fetch(
+            """SELECT j.id,j.order_id,j.attempt_count FROM jobs j
+               JOIN orders o ON o.id=j.order_id
+               WHERE j.status='PROCESSING' AND j.started_at < now() - ($1 * interval '1 second')
+               ORDER BY j.started_at LIMIT 100 FOR UPDATE OF j,o SKIP LOCKED""",
+            timeout_seconds,
+        )
+        for row in rows:
+            await fail_job(
+                connection, Claim(row["id"], row["order_id"], row["attempt_count"]),
+                "WORKER_TIMEOUT", retryable=True,
+            )
+        return len(rows)

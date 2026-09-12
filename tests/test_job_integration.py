@@ -6,8 +6,7 @@ from uuid import uuid4
 
 import asyncpg
 import pytest
-
-from platform_core.jobs import claim_job, fail_job, pending_jobs
+from platform_core.jobs import claim_job, fail_job, pending_jobs, recover_stale_jobs
 from platform_core.ledger import Balance, balance, credit
 from platform_core.orders import confirm_order, ensure_telegram_user
 
@@ -95,3 +94,17 @@ async def test_rejected_claim_does_not_touch_wallet(db, reserved_order):
     assert await claim_job(db, uuid4()) is None
     assert await balance(db, user_id) == Balance(0, 1000)
     assert (job_id, 1) in await pending_jobs(db)
+
+
+@pytest.mark.asyncio
+async def test_expired_processing_attempt_recovers(db, reserved_order):
+    user_id, _, job_id = reserved_order
+    claim = await claim_job(db, job_id)
+    await db.execute("UPDATE jobs SET started_at=now()-interval '10 minutes' WHERE id=$1", job_id)
+    assert await recover_stale_jobs(db) >= 1
+    assert await db.fetchval("SELECT status FROM jobs WHERE id=$1", job_id) == "PENDING"
+    assert await db.fetchval(
+        "SELECT error_code FROM job_attempts WHERE job_id=$1 AND attempt_number=1", job_id,
+    ) == "WORKER_TIMEOUT"
+    assert await balance(db, user_id) == Balance(0, 1000)
+    assert (job_id, claim.attempt_number + 1) in await pending_jobs(db)

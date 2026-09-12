@@ -7,7 +7,7 @@ from arq.connections import RedisSettings
 from arq.cron import cron
 
 from platform_core.config import get_settings
-from platform_core.jobs import claim_job, fail_job, pending_jobs
+from platform_core.jobs import claim_job, fail_job, pending_jobs, recover_stale_jobs
 from platform_core.logging import configure_logging
 
 settings = get_settings()
@@ -33,6 +33,16 @@ async def dispatch_pending(ctx) -> None:
         await connection.close()
 
 
+async def recover_processing(ctx) -> None:
+    connection = await asyncpg.connect(settings.database_url.replace("+asyncpg", ""))
+    try:
+        recovered = await recover_stale_jobs(connection)
+        if recovered:
+            logger.warning("stale_jobs_recovered", extra={"count": recovered})
+    finally:
+        await connection.close()
+
+
 async def process_job(ctx, job_id: str) -> None:
     """Fail closed until a validated service processor and delivery exist."""
     from uuid import UUID
@@ -53,7 +63,9 @@ class WorkerSettings:
     cron_jobs: ClassVar[list] = [
         cron(worker_heartbeat, second={0, 30}),
         cron(dispatch_pending, second={5, 35}),
+        cron(recover_processing, second={15, 45}),
     ]
+    job_timeout = 120
     redis_settings = RedisSettings(
         host=redis_url.hostname or "localhost",
         port=redis_url.port or 6379,
