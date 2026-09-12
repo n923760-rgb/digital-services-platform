@@ -1,13 +1,13 @@
 """Backup freshness determines what administrators see without exposing archive files."""
 
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from platform_core.backup_status import backup_health
 
 
 def test_backup_freshness_and_missing_marker(tmp_path):
-    now = datetime(2026, 9, 12, tzinfo=timezone.utc)
+    now = datetime(2026, 9, 12, tzinfo=UTC)
     marker = tmp_path / "latest"
     assert backup_health(str(marker), now=now) == {"status": "missing", "last_success_at": None}
     marker.write_text("success\n")
