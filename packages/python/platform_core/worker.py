@@ -152,6 +152,7 @@ async def process_job(ctx, job_id: str) -> None:
                 connection, storage, settings.object_storage_bucket, claim.order_id,
                 max_upload_bytes=settings.max_upload_bytes,
                 retention_days=settings.file_retention_days,
+                sandbox_root=settings.pdf_sandbox_root,
             )
             await complete_job(connection, claim, result_file_id)
         except (InvalidPDF, InvalidFile, FileUnavailable, ValueError):

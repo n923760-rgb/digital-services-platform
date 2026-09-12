@@ -7,11 +7,13 @@ import asyncpg
 
 from platform_core.files import Storage, read_file, upload_file
 from platform_core.pdf_isolation import merge_pdfs_isolated
+from platform_core.pdf_sandbox_client import merge_pdfs_in_sandbox
 
 
 async def process_pdf_merge(
     connection: asyncpg.Connection, storage: Storage, bucket: str,
     order_id: UUID, *, max_upload_bytes: int, retention_days: int,
+    sandbox_root: str | None = None,
 ) -> UUID:
     order = await connection.fetchrow("SELECT user_id FROM orders WHERE id=$1", order_id)
     if not order:
@@ -28,7 +30,11 @@ async def process_pdf_merge(
         await read_file(connection, storage, bucket, order["user_id"], row["id"])
         for row in rows
     ]
-    result = await asyncio.to_thread(merge_pdfs_isolated, documents)
+    if sandbox_root is None:
+        # Direct internal callers/tests can use the local bounded subprocess.
+        result = await asyncio.to_thread(merge_pdfs_isolated, documents)
+    else:
+        result = await asyncio.to_thread(merge_pdfs_in_sandbox, documents, sandbox_root)
     record = await upload_file(
         connection, storage, bucket, order["user_id"], "merged.pdf", "application/pdf",
         result, order_id=order_id, file_type="OUTPUT", limit=max_upload_bytes,
