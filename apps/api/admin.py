@@ -2,6 +2,7 @@
 
 import hashlib
 from contextlib import asynccontextmanager
+from typing import Any, Literal
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -21,9 +22,11 @@ from platform_core.service_registry import (
     ServiceNotFound,
     ServiceRevisionConflict,
     ServiceUpdateRejected,
+    create_category,
+    create_service,
     update_service,
 )
-from pydantic import BaseModel, ConfigDict, StrictBool, StrictInt
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt
 from redis.exceptions import RedisError
 
 router = APIRouter(prefix="/api/admin")
@@ -103,6 +106,27 @@ class ServiceUpdateForm(BaseModel):
     base_price_halalas: StrictInt | None = None
     enabled: StrictBool | None = None
     confirm: StrictBool = False
+
+
+class CategoryCreateForm(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    slug: str
+    name_ar: str
+    reason: str
+
+
+class ServiceCreateForm(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    category_id: UUID
+    slug: str
+    name_ar: str
+    description_ar: str = ""
+    processor_type: Literal["ai", "tool", "template", "manual", "hybrid"]
+    base_price_halalas: StrictInt
+    input_schema: dict[str, Any] = Field(default_factory=dict)
+    reason: str
 
 
 @router.post("/login")
@@ -185,6 +209,52 @@ async def services(_admin: AdminIdentity = VIEW_DEPENDENCY):
           JOIN service_categories c ON c.id=s.category_id
           ORDER BY c.name_ar,s.name_ar,s.id LIMIT 200""")
     return [{**dict(row), "id": str(row["id"])} for row in rows]
+
+
+@router.get("/categories")
+async def categories(_admin: AdminIdentity = VIEW_DEPENDENCY):
+    async with database() as db:
+        rows = await db.fetch("""SELECT id,slug,name_ar,enabled
+          FROM service_categories ORDER BY name_ar,id LIMIT 200""")
+    return [{**dict(row), "id": str(row["id"])} for row in rows]
+
+
+@router.post("/categories")
+async def register_category(request: Request, form: CategoryCreateForm,
+                            admin: AdminIdentity = MANAGE_DEPENDENCY):
+    check_origin(request)
+    async with database() as db:
+        try:
+            category_id = await create_category(
+                db, admin.id, slug=form.slug, name_ar=form.name_ar, reason=form.reason,
+            )
+        except ServiceRevisionConflict as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except ServiceUpdateRejected as exc:
+            raise HTTPException(422, str(exc)) from exc
+    return {"id": str(category_id)}
+
+
+@router.post("/services")
+async def register_service(request: Request, form: ServiceCreateForm,
+                           admin: AdminIdentity = MANAGE_DEPENDENCY):
+    check_origin(request)
+    async with database() as db:
+        try:
+            service_id = await create_service(
+                db, admin.id, category_id=form.category_id, slug=form.slug,
+                name_ar=form.name_ar, description_ar=form.description_ar,
+                processor_type=form.processor_type, base_price_halalas=form.base_price_halalas,
+                input_schema=form.input_schema, reason=form.reason,
+            )
+        except ServiceNotFound as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except ServiceRevisionConflict as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except ServiceUpdateRejected as exc:
+            raise HTTPException(422, str(exc)) from exc
+        enabled = await db.fetchval("SELECT enabled FROM services WHERE id=$1", service_id)
+    return {"id": str(service_id), "enabled": enabled}
 
 
 @router.patch("/services/{service_id}")
