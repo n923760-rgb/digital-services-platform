@@ -6,7 +6,6 @@ from uuid import uuid4
 
 import asyncpg
 import pytest
-
 from platform_core.ledger import (
     Balance,
     IdempotencyConflict,
