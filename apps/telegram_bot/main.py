@@ -23,7 +23,7 @@ from platform_core.orders import ensure_telegram_user
 from platform_core.service_catalog import available_services
 from platform_core.telegram_workflow import active_workflow
 
-from apps.telegram_bot import pdf_workflow
+from apps.telegram_bot import customer_files, pdf_workflow
 
 logger = logging.getLogger(__name__)
 dispatcher = Dispatcher()
@@ -149,6 +149,11 @@ async def select_service(callback: CallbackQuery) -> None:
         await pdf_workflow.begin(callback.message, callback.from_user.id)
 
 
+@dispatcher.callback_query(F.data.startswith("files:get:"))
+async def file_callback(callback: CallbackQuery, bot: Bot) -> None:
+    await customer_files.send_file(callback, bot)
+
+
 @dispatcher.message(F.text)
 async def text_message(message: Message) -> None:
     if message.chat.type != "private" or message.from_user is None:
@@ -156,6 +161,8 @@ async def text_message(message: Message) -> None:
     content = message.text.strip().lower()
     if content in {"✨ الخدمات", "🧰 الأدوات"}:
         await show_catalog(message)
+    elif content == "📁 ملفاتي":
+        await customer_files.show_files(message)
     elif content == "🔗 دمج pdf" or ("pdf" in content and any(
         term in content for term in ("ادمج", "دمج", "merge")
     )):
