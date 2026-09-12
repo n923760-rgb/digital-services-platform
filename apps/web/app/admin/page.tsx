@@ -3,8 +3,9 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 
 type Admin = { username: string; role: string; service_activation_enabled: boolean };
-type Overview = { orders_today: number; processing_orders: number; completed_orders: number; failed_orders: number; failed_jobs: number; failed_deliveries: number; wallet_topups_today: number; failed_payments: number; backup: { status: "ok" | "missing" | "stale" | "unconfigured"; last_success_at: string | null } };
+type Overview = { orders_today: number; processing_orders: number; completed_orders: number; failed_orders: number; failed_jobs: number; failed_deliveries: number; new_custom_requests: number; wallet_topups_today: number; failed_payments: number; backup: { status: "ok" | "missing" | "stale" | "unconfigured"; last_success_at: string | null } };
 type Order = { id: string; status: string; channel: string; service_name: string; price_snapshot_halalas: number; currency: string; created_at: string; failed_jobs: number };
+type CustomRequest = { id: string; description: string; telegram_user_id: number; created_at: string; updated_at: string };
 type FailedWork = { id: string; order_id: string; service_name: string; error_code: string | null; attempt_count: number; max_attempts: number; failed_at: string | null };
 type FailedPayment = { id: string; provider: string; amount_halalas: number; created_at: string };
 type Attention = { jobs: FailedWork[]; deliveries: FailedWork[]; payments: FailedPayment[] };
@@ -23,6 +24,7 @@ export default function AdminPage() {
   const [admin, setAdmin] = useState<Admin | null>(null);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [customRequests, setCustomRequests] = useState<CustomRequest[]>([]);
   const [attention, setAttention] = useState<Attention | null>(null);
   const [services, setServices] = useState<Service[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -32,20 +34,22 @@ export default function AdminPage() {
   const refresh = useCallback(async () => {
     try {
       const me = await fetch("/api/admin/me", { credentials: "same-origin", cache: "no-store" });
-      if (me.status === 401) { setAdmin(null); setOverview(null); setAttention(null); setOrders([]); setServices([]); setCategories([]); return; }
+      if (me.status === 401) { setAdmin(null); setOverview(null); setAttention(null); setOrders([]); setCustomRequests([]); setServices([]); setCategories([]); return; }
       if (!me.ok) throw new Error("تعذر التحقق من صلاحيات الإدارة");
       const person: Admin = await me.json();
-      const [stats, list, incidents, catalog, groups] = await Promise.all([
+      const [stats, list, incidents, catalog, groups, requests] = await Promise.all([
         fetch("/api/admin/overview", { cache: "no-store" }),
         fetch("/api/admin/orders", { cache: "no-store" }),
         fetch("/api/admin/attention", { cache: "no-store" }),
         fetch("/api/admin/services", { cache: "no-store" }),
         fetch("/api/admin/categories", { cache: "no-store" }),
+        fetch("/api/admin/custom-requests", { cache: "no-store" }),
       ]);
-      if (!stats.ok || !list.ok || !incidents.ok || !catalog.ok || !groups.ok) throw new Error("تعذر تحميل بيانات التشغيل");
+      if (!stats.ok || !list.ok || !incidents.ok || !catalog.ok || !groups.ok || !requests.ok) throw new Error("تعذر تحميل بيانات التشغيل");
       setAdmin(person);
       setOverview(await stats.json());
       setOrders(await list.json());
+      setCustomRequests(await requests.json());
       setAttention(await incidents.json());
       setServices(await catalog.json());
       setCategories(await groups.json());
@@ -73,7 +77,7 @@ export default function AdminPage() {
 
   async function signOut() {
     const result = await fetch("/api/admin/logout", { method: "POST", credentials: "same-origin" });
-    if (result.ok) { setAdmin(null); setOverview(null); setAttention(null); setOrders([]); setServices([]); setCategories([]); }
+    if (result.ok) { setAdmin(null); setOverview(null); setAttention(null); setOrders([]); setCustomRequests([]); setServices([]); setCategories([]); }
     else setError("تعذر تسجيل الخروج");
   }
 
@@ -159,6 +163,7 @@ export default function AdminPage() {
   const metrics: [string, number][] = overview ? [
     ["طلبات اليوم", overview.orders_today], ["قيد التنفيذ", overview.processing_orders],
     ["مكتملة", overview.completed_orders], ["طلبات فاشلة", overview.failed_orders],
+    ["طلبات خدمات للمراجعة", overview.new_custom_requests],
     ["شحن المحفظة اليوم", overview.wallet_topups_today],
   ] : [];
   const backup = overview?.backup;
@@ -177,7 +182,7 @@ export default function AdminPage() {
       {metrics.map(([label, value]) => <div key={label} style={card}><div>{label}</div><strong style={{ fontSize: 28 }}>{value}</strong></div>)}
     </section>
     <section style={{ ...card, marginBottom: 24, borderColor: "#bf8738" }}>
-      <h2>تحتاج متابعة</h2><p>مهام فاشلة: {overview?.failed_jobs ?? 0} · تسليمات فاشلة: {overview?.failed_deliveries ?? 0} · طلبات فاشلة: {overview?.failed_orders ?? 0} · دفعات فاشلة: {overview?.failed_payments ?? 0}</p>
+      <h2>تحتاج متابعة</h2><p>طلبات خدمات جديدة: {overview?.new_custom_requests ?? 0} · مهام فاشلة: {overview?.failed_jobs ?? 0} · تسليمات فاشلة: {overview?.failed_deliveries ?? 0} · طلبات فاشلة: {overview?.failed_orders ?? 0} · دفعات فاشلة: {overview?.failed_payments ?? 0}</p>
       <p role={backup?.status === "ok" ? undefined : "alert"}>النسخ الاحتياطي: {backupLabel}{backup?.last_success_at ? ` · آخر نسخة: ${new Date(backup.last_success_at).toLocaleString("ar-SA")}` : ""}</p>
       {failures.length > 0 && <><h3>المهام والتسليمات</h3><ul style={{ paddingInlineStart: 22 }}>
         {failures.map(item => <li key={`${item.type}-${item.id}`} style={{ paddingBlock: 8, overflowWrap: "anywhere" }}>
@@ -192,6 +197,16 @@ export default function AdminPage() {
           {" · "}{new Date(item.created_at).toLocaleString("ar-SA")}
         </li>)}
       </ul></>}
+    </section>
+    <section style={{ ...card, marginBottom: 24 }} aria-label="طلبات الخدمات الخاصة">
+      <h2>طلبات خدمات للمراجعة</h2>
+      <p>هذه الطلبات للمراجعة فقط. تحديد السعر والتواصل والتنفيذ لم تُفعّل بعد.</p>
+      {customRequests.map(request => <article key={request.id} style={{ borderTop: "1px solid #e6ebed", paddingBlock: 12, overflowWrap: "anywhere" }}>
+        <strong>طلب جديد · <code dir="ltr">{request.id}</code></strong>
+        <p style={{ whiteSpace: "pre-wrap" }}>{request.description}</p>
+        <small>معرّف العميل في تيليجرام: <code dir="ltr">{request.telegram_user_id}</code> · أُرسل: {new Date(request.updated_at).toLocaleString("ar-SA")}</small>
+      </article>)}
+      {!customRequests.length && <p>لا توجد طلبات جديدة.</p>}
     </section>
     <section style={{ ...card, marginBottom: 24 }} aria-label="كتالوج الخدمات">
       <h2>الخدمات</h2>

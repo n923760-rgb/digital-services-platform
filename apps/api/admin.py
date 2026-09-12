@@ -183,6 +183,7 @@ async def overview(_admin: AdminIdentity = VIEW_DEPENDENCY):
           (SELECT count(*) FROM orders WHERE status='FAILED') AS failed_orders,
           (SELECT count(*) FROM jobs WHERE status='FAILED') AS failed_jobs,
           (SELECT count(*) FROM delivery_outbox WHERE status='FAILED') AS failed_deliveries,
+          (SELECT count(*) FROM custom_service_requests WHERE status='NEW') AS new_custom_requests,
           (SELECT count(*) FROM payments WHERE status='PAID' AND paid_at >= CURRENT_DATE)
             AS wallet_topups_today,
           (SELECT count(*) FROM payments WHERE status='FAILED') AS failed_payments""")
@@ -197,6 +198,16 @@ async def orders(_admin: AdminIdentity = VIEW_DEPENDENCY):
           (SELECT count(*) FROM jobs j WHERE j.order_id=o.id AND j.status='FAILED') AS failed_jobs
           FROM orders o JOIN services s ON s.id=o.service_id
           ORDER BY o.created_at DESC,o.id DESC LIMIT 100""")
+    return [{**dict(row), "id": str(row["id"])} for row in rows]
+
+
+@router.get("/custom-requests")
+async def custom_requests(_admin: AdminIdentity = VIEW_DEPENDENCY):
+    async with database() as db:
+        rows = await db.fetch("""SELECT r.id,r.description,r.created_at,r.updated_at,
+          u.telegram_user_id FROM custom_service_requests r
+          JOIN users u ON u.id=r.user_id WHERE r.status='NEW'
+          ORDER BY r.updated_at DESC,r.id DESC LIMIT 50""")
     return [{**dict(row), "id": str(row["id"])} for row in rows]
 
 
