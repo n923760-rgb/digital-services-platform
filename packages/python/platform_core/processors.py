@@ -6,7 +6,7 @@ from uuid import UUID
 import asyncpg
 
 from platform_core.files import Storage, read_file, upload_file
-from platform_core.pdf_merge import merge_pdfs
+from platform_core.pdf_isolation import merge_pdfs_isolated
 
 
 async def process_pdf_merge(
@@ -28,7 +28,7 @@ async def process_pdf_merge(
         await read_file(connection, storage, bucket, order["user_id"], row["id"])
         for row in rows
     ]
-    result = await asyncio.to_thread(merge_pdfs, documents)
+    result = await asyncio.to_thread(merge_pdfs_isolated, documents)
     record = await upload_file(
         connection, storage, bucket, order["user_id"], "merged.pdf", "application/pdf",
         result, order_id=order_id, file_type="OUTPUT", limit=max_upload_bytes,
