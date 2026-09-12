@@ -8,9 +8,11 @@ from arq.connections import RedisSettings
 from arq.cron import cron
 
 from platform_core.config import get_settings
-from platform_core.files import cleanup_expired_files
-from platform_core.jobs import claim_job, fail_job, pending_jobs, recover_stale_jobs
+from platform_core.files import FileUnavailable, InvalidFile, cleanup_expired_files
+from platform_core.jobs import claim_job, complete_job, fail_job, pending_jobs, recover_stale_jobs
 from platform_core.logging import configure_logging
+from platform_core.pdf_merge import InvalidPDF
+from platform_core.processors import PROCESSORS
 from platform_core.storage_s3 import S3Storage
 
 settings = get_settings()
@@ -65,7 +67,7 @@ async def cleanup_files(ctx) -> None:
 
 
 async def process_job(ctx, job_id: str) -> None:
-    """Fail closed until a validated service processor and delivery exist."""
+    """Process registered tools and retain successful output for later delivery."""
     from uuid import UUID
 
     connection = await asyncpg.connect(settings.database_url.replace("+asyncpg", ""))
@@ -73,8 +75,34 @@ async def process_job(ctx, job_id: str) -> None:
         claim = await claim_job(connection, UUID(job_id))
         if claim is None:
             return
-        logger.error("service_processor_unavailable", extra={"job_id": job_id, "order_id": str(claim.order_id)})
-        await fail_job(connection, claim, "PROCESSOR_UNAVAILABLE", retryable=False)
+        service = await connection.fetchrow(
+            """SELECT s.slug,s.processor_type FROM orders o JOIN services s ON s.id=o.service_id
+               WHERE o.id=$1""", claim.order_id,
+        )
+        processor = PROCESSORS.get(service["slug"]) if service["processor_type"] == "tool" else None
+        if processor is None:
+            logger.error("service_processor_unavailable", extra={"job_id": job_id})
+            await fail_job(connection, claim, "PROCESSOR_UNAVAILABLE", retryable=False)
+            return
+        try:
+            storage = S3Storage(boto3.client(
+                "s3", endpoint_url=settings.object_storage_endpoint,
+                aws_access_key_id=settings.object_storage_access_key,
+                aws_secret_access_key=settings.object_storage_secret_key,
+                region_name=settings.object_storage_region,
+            ))
+            result_file_id = await processor(
+                connection, storage, settings.object_storage_bucket, claim.order_id,
+                max_upload_bytes=settings.max_upload_bytes,
+                retention_days=settings.file_retention_days,
+            )
+            await complete_job(connection, claim, result_file_id)
+        except (InvalidPDF, InvalidFile, FileUnavailable, ValueError):
+            logger.exception("service_input_invalid", extra={"job_id": job_id})
+            await fail_job(connection, claim, "INVALID_INPUT", retryable=False)
+        except Exception:
+            logger.exception("service_processing_failed", extra={"job_id": job_id})
+            await fail_job(connection, claim, "PROCESSING_ERROR", retryable=True)
     finally:
         await connection.close()
 
