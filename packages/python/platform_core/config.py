@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     file_retention_days: int = 30
     max_upload_bytes: int = 20 * 1024 * 1024
     pdf_sandbox_root: str = ""
+    backup_status_path: str = ""
     telegram_bot_token: str = ""
     telegram_orders_enabled: bool = False
     admin_cookie_secure: bool = True

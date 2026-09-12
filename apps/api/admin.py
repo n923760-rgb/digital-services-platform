@@ -14,6 +14,7 @@ from platform_core.admin_auth import (
     load_session,
     revoke_session,
 )
+from platform_core.backup_status import backup_health
 from platform_core.config import get_settings
 from pydantic import BaseModel
 from redis.exceptions import RedisError
@@ -133,7 +134,7 @@ async def overview(_admin: AdminIdentity = VIEW_DEPENDENCY):
           (SELECT count(*) FROM payments WHERE status='PAID' AND paid_at >= CURRENT_DATE)
             AS wallet_topups_today,
           (SELECT count(*) FROM payments WHERE status='FAILED') AS failed_payments""")
-    return dict(row)
+    return {**dict(row), "backup": backup_health(get_settings().backup_status_path)}
 
 
 @router.get("/orders")

@@ -70,7 +70,9 @@ async def test_routes_enforce_role_and_origin(db):
         assert (await client.get("/api/admin/overview")).status_code == 401
         client.cookies.set(admin_api.COOKIE_NAME, token)
         assert (await client.get("/api/admin/me")).json()["role"] == "OPERATOR"
-        assert (await client.get("/api/admin/overview")).status_code == 200
+        overview = await client.get("/api/admin/overview")
+        assert overview.status_code == 200
+        assert overview.json()["backup"]["status"] == "unconfigured"
         assert (await client.get("/api/admin/audit")).status_code == 403
         assert (await client.post("/api/admin/logout", headers={"Origin": "https://evil.example"})).status_code == 403
         assert (await client.post("/api/admin/logout", headers={"Origin": "https://test"})).status_code == 200
