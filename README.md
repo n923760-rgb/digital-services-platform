@@ -21,6 +21,8 @@ The PDF merge conversation is persisted in PostgreSQL but remains **off by defau
 
 To create the first administrator after migrations, use an interactive terminal: `docker compose exec -it api python -m platform_core.admin_bootstrap`. Enter a unique username and a password of at least 12 characters at the prompts. The command refuses to create another owner after the first one exists. Visit `/admin` for the read-only dashboard. OWNER can view the audit API; OPERATOR can view operational data but cannot view audit events. Administrative write operations are not yet exposed. For local HTTP only, set `ADMIN_COOKIE_SECURE=false` in your untracked `.env` before starting the API; always keep it `true` with HTTPS in production. The admin session lasts up to 12 hours, and the login endpoint requires a matching browser Origin and Redis rate limiting.
 
+The provider-independent payment kernel stores wallet top-up intents and signed-provider event receipts. It checks the provider, reference, amount and SAR currency before crediting once in the same database transaction. There is **no checkout endpoint, live provider adapter or public webhook**; the signature adapter in tests is only a test fixture. Do not fund customer wallets using a simulated provider. See [payment integration requirements](docs/PAYMENTS.md).
+
 To run the Python checks locally, use Python 3.12 and `pip install -e '.[dev]'`, then `ruff check apps packages tests migrations`, `alembic upgrade head`, and `pytest -q` against a dedicated test PostgreSQL database. For the web app, use Node 22, run `npm install`, `npm run typecheck`, and `npm run build` inside `apps/web`.
 
 ## Layout

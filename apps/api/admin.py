@@ -129,7 +129,10 @@ async def overview(_admin: AdminIdentity = VIEW_DEPENDENCY):
           (SELECT count(*) FROM orders WHERE status='COMPLETED') AS completed_orders,
           (SELECT count(*) FROM orders WHERE status='FAILED') AS failed_orders,
           (SELECT count(*) FROM jobs WHERE status='FAILED') AS failed_jobs,
-          (SELECT count(*) FROM delivery_outbox WHERE status='FAILED') AS failed_deliveries""")
+          (SELECT count(*) FROM delivery_outbox WHERE status='FAILED') AS failed_deliveries,
+          (SELECT count(*) FROM payments WHERE status='PAID' AND paid_at >= CURRENT_DATE)
+            AS wallet_topups_today,
+          (SELECT count(*) FROM payments WHERE status='FAILED') AS failed_payments""")
     return dict(row)
 
 
