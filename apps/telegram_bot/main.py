@@ -2,11 +2,11 @@ import asyncio
 import logging
 import os
 from contextlib import suppress
+from pathlib import Path
 
 from aiogram import Bot, Dispatcher
 from aiogram.filters import CommandStart
 from aiogram.types import Message
-
 from platform_core.config import get_settings
 from platform_core.logging import configure_logging
 
@@ -24,8 +24,7 @@ async def start(message: Message) -> None:
 
 async def heartbeat() -> None:
     while True:
-        with open("/tmp/bot-heartbeat", "w", encoding="ascii") as marker:
-            marker.write("ready")
+        await asyncio.to_thread(Path("/tmp/bot-heartbeat").write_text, "ready", encoding="ascii")
         await asyncio.sleep(15)
 
 

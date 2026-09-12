@@ -10,7 +10,7 @@ Telegram and HTTP are transport adapters. New customer channels may invoke appli
 
 This milestone delivers the runnable processes, Compose dependencies, Caddy routes, baseline migration, structured logging, health endpoints, and CI. The Alembic revision is intentionally empty: adding speculative business tables before their invariants and transactions are implemented would create a misleading financial schema. No service fulfillment, wallet balances, orders, payment endpoints or customer uploads are active. The visible web page is a placeholder, not an admin dashboard.
 
-API liveness: `GET /api/health/live`. API readiness: `GET /api/health/ready` probes PostgreSQL, Redis and object storage. Next.js: `GET /web-health`. ARQ's health key monitors worker operation; the Telegram profile uses a fresh heartbeat after a successful bot API connection. Caddy routes `/api/*` to FastAPI and all other paths to Next.js.
+API liveness: `GET /api/health/live`. API readiness: `GET /api/health/ready` probes PostgreSQL, Redis and the configured S3 bucket via a signed `HeadBucket` request. Next.js: `GET /web-health`. ARQ's health key monitors worker operation; the Telegram profile uses a fresh heartbeat after a successful bot API connection. Caddy routes `/api/*` to FastAPI and all other paths to Next.js. The bundled S3Mock is for development/CI and is never a production data store.
 
 ## CORE-001 prerequisites
 

@@ -1,3 +1,4 @@
+from typing import ClassVar
 from urllib.parse import urlparse
 
 from arq.connections import RedisSettings
@@ -18,8 +19,8 @@ async def worker_heartbeat(ctx) -> None:
 
 class WorkerSettings:
     # Real service jobs are registered in CORE-001, with explicit idempotency and retry rules.
-    functions = []
-    cron_jobs = [cron(worker_heartbeat, second={0, 30})]
+    functions: ClassVar[list] = []
+    cron_jobs: ClassVar[list] = [cron(worker_heartbeat, second={0, 30})]
     redis_settings = RedisSettings(
         host=redis_url.hostname or "localhost",
         port=redis_url.port or 6379,
