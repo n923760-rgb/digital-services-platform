@@ -53,13 +53,15 @@ def quote_keyboard(workflow_id: UUID) -> InlineKeyboardMarkup:
     ]])
 
 
-async def begin(message: Message) -> None:
+async def begin(message: Message, telegram_user_id: int | None = None) -> None:
     if not settings.telegram_orders_enabled:
         await message.answer("الخدمة قيد التجهيز حاليًا.")
         return
     connection = await asyncpg.connect(settings.database_url.replace("+asyncpg", ""))
     try:
-        user_id = await ensure_telegram_user(connection, message.from_user.id)
+        user_id = await ensure_telegram_user(
+            connection, telegram_user_id if telegram_user_id is not None else message.from_user.id,
+        )
         workflow = await start_pdf_merge(connection, user_id)
         if workflow.status == "CONFIRMING":
             await show_quote(message, connection, user_id)
