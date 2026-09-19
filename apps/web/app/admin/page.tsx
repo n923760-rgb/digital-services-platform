@@ -3,9 +3,9 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 
 type Admin = { username: string; role: string; service_activation_enabled: boolean };
-type Overview = { orders_today: number; processing_orders: number; completed_orders: number; failed_orders: number; failed_jobs: number; failed_deliveries: number; new_custom_requests: number; wallet_topups_today: number; failed_payments: number; backup: { status: "ok" | "missing" | "stale" | "unconfigured"; last_success_at: string | null } };
+type Overview = { orders_today: number; processing_orders: number; completed_orders: number; failed_orders: number; failed_jobs: number; failed_deliveries: number; new_custom_requests: number; reviewing_custom_requests: number; wallet_topups_today: number; failed_payments: number; backup: { status: "ok" | "missing" | "stale" | "unconfigured"; last_success_at: string | null } };
 type Order = { id: string; status: string; channel: string; service_name: string; price_snapshot_halalas: number; currency: string; created_at: string; failed_jobs: number };
-type CustomRequest = { id: string; description: string; telegram_user_id: number; created_at: string; updated_at: string };
+type CustomRequest = { id: string; description: string; status: "NEW" | "IN_REVIEW"; revision: number; reviewer_username: string | null; telegram_user_id: number; created_at: string; updated_at: string };
 type FailedWork = { id: string; order_id: string; service_name: string; error_code: string | null; attempt_count: number; max_attempts: number; failed_at: string | null };
 type FailedPayment = { id: string; provider: string; amount_halalas: number; created_at: string };
 type Attention = { jobs: FailedWork[]; deliveries: FailedWork[]; payments: FailedPayment[] };
@@ -149,6 +149,27 @@ export default function AdminPage() {
     } catch (e) { setError(e instanceof Error ? e.message : "تعذر تسجيل الخدمة"); }
   }
 
+  async function triageCustomRequest(event: FormEvent<HTMLFormElement>, item: CustomRequest, action: "START_REVIEW" | "DECLINE") {
+    event.preventDefault();
+    const fields = new FormData(event.currentTarget);
+    const reason = String(fields.get("reason") ?? "").trim();
+    if (reason.length < 10 || reason.length > 500) { setError("سبب الإجراء يجب أن يكون بين 10 و500 حرف"); return; }
+    if (action === "DECLINE" && !window.confirm("تأكيد رفض الطلب؟ لا يمكن إعادته من هذه الشاشة.")) return;
+    try {
+      const result = await fetch(`/api/admin/custom-requests/${item.id}`, {
+        method: "PATCH", credentials: "same-origin", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expected_revision: item.revision, action, reason }),
+      });
+      if (!result.ok) {
+        if (result.status === 409) { await refresh(); throw new Error("تغيّر الطلب من جلسة أخرى، راجع البيانات المحدّثة"); }
+        throw new Error(result.status === 403 ? "هذا الإجراء متاح للمالك فقط" :
+          result.status === 422 ? "لا يمكن تنفيذ الإجراء في حالة الطلب الحالية" : "تعذر تحديث الطلب");
+      }
+      await refresh();
+      setError("");
+    } catch (e) { setError(e instanceof Error ? e.message : "تعذر تحديث الطلب"); }
+  }
+
   const card = { border: "1px solid #d9e3e5", borderRadius: 14, padding: 20, background: "white" };
   if (loading) return <main><p>جارٍ تحميل لوحة التشغيل…</p></main>;
   if (!admin) return <main style={{ maxWidth: 410, margin: "10vh auto" }}>
@@ -163,7 +184,8 @@ export default function AdminPage() {
   const metrics: [string, number][] = overview ? [
     ["طلبات اليوم", overview.orders_today], ["قيد التنفيذ", overview.processing_orders],
     ["مكتملة", overview.completed_orders], ["طلبات فاشلة", overview.failed_orders],
-    ["طلبات خدمات للمراجعة", overview.new_custom_requests],
+    ["طلبات خدمات جديدة", overview.new_custom_requests],
+    ["قيد مراجعة الخدمات", overview.reviewing_custom_requests],
     ["شحن المحفظة اليوم", overview.wallet_topups_today],
   ] : [];
   const backup = overview?.backup;
@@ -200,11 +222,15 @@ export default function AdminPage() {
     </section>
     <section style={{ ...card, marginBottom: 24 }} aria-label="طلبات الخدمات الخاصة">
       <h2>طلبات خدمات للمراجعة</h2>
-      <p>هذه الطلبات للمراجعة فقط. تحديد السعر والتواصل والتنفيذ لم تُفعّل بعد.</p>
+      <p>يمكن للمالك بدء المراجعة أو رفض الطلب بسبب موثّق. تحديد السعر والتواصل والتنفيذ لم تُفعّل بعد.</p>
       {customRequests.map(request => <article key={request.id} style={{ borderTop: "1px solid #e6ebed", paddingBlock: 12, overflowWrap: "anywhere" }}>
-        <strong>طلب جديد · <code dir="ltr">{request.id}</code></strong>
+        <strong>{request.status === "NEW" ? "طلب جديد" : "قيد المراجعة"} · <code dir="ltr">{request.id}</code></strong>
         <p style={{ whiteSpace: "pre-wrap" }}>{request.description}</p>
-        <small>معرّف العميل في تيليجرام: <code dir="ltr">{request.telegram_user_id}</code> · أُرسل: {new Date(request.updated_at).toLocaleString("ar-SA")}</small>
+        <small>معرّف العميل في تيليجرام: <code dir="ltr">{request.telegram_user_id}</code> · أُرسل: {new Date(request.updated_at).toLocaleString("ar-SA")}{request.reviewer_username ? ` · المراجع: ${request.reviewer_username}` : ""}</small>
+        {admin.role === "OWNER" && <form onSubmit={event => void triageCustomRequest(event, request, request.status === "NEW" ? "START_REVIEW" : "DECLINE")} style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+          <input name="reason" required minLength={10} maxLength={500} placeholder={request.status === "NEW" ? "سبب بدء المراجعة" : "سبب رفض الطلب"} style={{ minWidth: 260, flex: 1 }} />
+          <button type="submit" style={{ padding: 9 }}>{request.status === "NEW" ? "بدء المراجعة" : "رفض الطلب"}</button>
+        </form>}
       </article>)}
       {!customRequests.length && <p>لا توجد طلبات جديدة.</p>}
     </section>

@@ -18,6 +18,12 @@ from platform_core.admin_auth import (
 )
 from platform_core.backup_status import backup_health
 from platform_core.config import get_settings
+from platform_core.custom_requests import (
+    CustomRequestNotFound,
+    CustomRequestRevisionConflict,
+    CustomRequestTransitionRejected,
+    triage_request,
+)
 from platform_core.service_registry import (
     ServiceNotFound,
     ServiceRevisionConflict,
@@ -129,6 +135,14 @@ class ServiceCreateForm(BaseModel):
     reason: str
 
 
+class CustomRequestTriageForm(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_revision: StrictInt
+    action: Literal["START_REVIEW", "DECLINE"]
+    reason: str
+
+
 @router.post("/login")
 async def login(request: Request, form: LoginForm, response: Response):
     check_origin(request)
@@ -184,6 +198,8 @@ async def overview(_admin: AdminIdentity = VIEW_DEPENDENCY):
           (SELECT count(*) FROM jobs WHERE status='FAILED') AS failed_jobs,
           (SELECT count(*) FROM delivery_outbox WHERE status='FAILED') AS failed_deliveries,
           (SELECT count(*) FROM custom_service_requests WHERE status='NEW') AS new_custom_requests,
+          (SELECT count(*) FROM custom_service_requests WHERE status='IN_REVIEW')
+            AS reviewing_custom_requests,
           (SELECT count(*) FROM payments WHERE status='PAID' AND paid_at >= CURRENT_DATE)
             AS wallet_topups_today,
           (SELECT count(*) FROM payments WHERE status='FAILED') AS failed_payments""")
@@ -204,11 +220,39 @@ async def orders(_admin: AdminIdentity = VIEW_DEPENDENCY):
 @router.get("/custom-requests")
 async def custom_requests(_admin: AdminIdentity = VIEW_DEPENDENCY):
     async with database() as db:
-        rows = await db.fetch("""SELECT r.id,r.description,r.created_at,r.updated_at,
-          u.telegram_user_id FROM custom_service_requests r
-          JOIN users u ON u.id=r.user_id WHERE r.status='NEW'
+        rows = await db.fetch("""SELECT r.id,r.description,r.status,r.revision,
+          r.created_at,r.updated_at,u.telegram_user_id,a.username AS reviewer_username
+          FROM custom_service_requests r JOIN users u ON u.id=r.user_id
+          LEFT JOIN admins a ON a.id=r.reviewed_by_admin_id
+          WHERE r.status IN ('NEW','IN_REVIEW')
           ORDER BY r.updated_at DESC,r.id DESC LIMIT 50""")
     return [{**dict(row), "id": str(row["id"])} for row in rows]
+
+
+@router.patch("/custom-requests/{request_id}")
+async def triage_custom_request(
+    request: Request,
+    request_id: UUID,
+    form: CustomRequestTriageForm,
+    admin: AdminIdentity = MANAGE_DEPENDENCY,
+):
+    check_origin(request)
+    async with database() as db:
+        try:
+            return await triage_request(
+                db,
+                request_id,
+                admin.id,
+                expected_revision=form.expected_revision,
+                action=form.action,
+                reason=form.reason,
+            )
+        except CustomRequestNotFound as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except CustomRequestRevisionConflict as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except CustomRequestTransitionRejected as exc:
+            raise HTTPException(422, str(exc)) from exc
 
 
 @router.get("/services")
