@@ -24,6 +24,8 @@ def main() -> None:
         if not isinstance(dependencies, list) or not dependencies:
             failures.append("python: invalid/empty dependency report")
         else:
+            if any(not isinstance(item, dict) or not item.get("name") for item in dependencies):
+                failures.append("python: malformed dependency entries")
             skipped = [item for item in dependencies if "skip_reason" in item]
             vulnerable = [item for item in dependencies if item.get("vulns")]
             print(f"Python audited {len(dependencies)} dependencies; skipped {len(skipped)}; "

@@ -56,10 +56,10 @@ Python setup: use the exact hashed build/dev requirements and no-dependency edit
 Static check: ruff check apps packages tests migrations scripts.
 Database/test checks: alembic upgrade head; pytest -q; alembic current.
 Run database tests only against a dedicated disposable migrated PostgreSQL database; financial tests preserve history.
-Web checks in apps/web: npm ci; npm run typecheck; npm run build; isolated tests/browser npm ci and Chromium checks in ci.yml (synthetic API, not live-backend proof). Review lock/fingerprint changes only in a bounded dependency task; never bypass hash validation or use floating installs during ordinary work.
+Web checks in apps/web: npm ci; npm audit --omit=dev; npm run typecheck; npm run build; isolated tests/browser npm ci and Chromium checks in ci.yml (synthetic API, not live-backend proof). Review lock/fingerprint changes only in a bounded dependency task; never bypass hash validation or use floating installs during ordinary work.
 Compose qualification follows .github/workflows/ci.yml in an isolated test deployment. Never run infrastructure/backup/restore_smoke.sh against production: it writes a seed row to its configured source DB even before creating its restore target.
 Select the smallest meaningful proof, then affected regressions. Do not claim local PASS from historical CI or a different SHA. Documentation-only edits need link/schema/diff review, not new tests that mirror prose.
-Current CI job names: python, web, compose. Reverify actual run/check names and exact source; protection is not assumed.
+Foundation CI job names: python, web, compose. Dependency advisory audit has job audit; qualify both exact-source workflows. See docs/DEPENDENCY-AUDIT.md for coverage and unavailable-scan handling. Reverify actual run/check names and exact source; protection is not assumed.
 Use PASS / FAIL / BLOCKED / UNKNOWN / NOT RUN / SKIPPED truthfully.
 
 ## Relevant local skills
