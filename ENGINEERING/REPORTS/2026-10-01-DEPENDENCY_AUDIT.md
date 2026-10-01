@@ -1,0 +1,7 @@
+# DSP-010 public dependency advisory qualification
+Source baseline: 08087d7f2798aad6b7d7ffe02ebc0d9fbb31f6d9; central governance 641e4f9e45da109257ba1f38752b94604c2e4531.
+FACT: hashed app inputs are qualified; no advisory scan was recorded. This task adds isolated pinned/hashed pip-audit tooling and npm audit against committed app dependency inputs, read-only CI permissions and public reports attributed to exact source.
+Audit tool pip-audit 2.9.0 has verified CLI flags --strict/--disable-pip/--require-hashes and supports Python 3.12. Application runtime/dev/npm/browser/container locks are not changed by tool resolution.
+Temporary isolated auditor generation must be removed after committing complete generated hash lock; final exact-head Foundation CI and advisory workflow must pass before qualified merge. No vulnerability exception/suppression or threshold bypass is authorized. Scanner/network failure is unavailable evidence and fails the job, never no-vulnerability proof.
+Coverage: Python runtime lock (sandbox parser shares exact qualified version) and npm production graph. OS/container images, development/build/browser/auditor dependencies, SBOM, signing, deploy artifacts and live provider remain separate release qualification. Advisories are time-dependent and scans query public registries with package names/versions; no customer data/secrets are supplied.
+No production, credentials, paid activation or dependency upgrades performed by this audit. If advisories appear, diagnose and prepare independently scoped remediation without weakening the scan.
