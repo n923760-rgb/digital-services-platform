@@ -2,7 +2,7 @@
 
 Status: Telegram bot product — internal foundation, production qualification incomplete.
 Owner confirmed 2026-10-01: Telegram is the customer interface; existing web is operations/admin tooling.
-Task baseline: 085462ca7c8f0234110507783dfbc85dc4be7e01. Historical attribution only; retrieve live main every session.
+Task baseline: fb12a3e49c930f58a1884e01ea60b1b5e5b98727. Historical attribution only; retrieve live main every session.
 [Baseline](REPORTS/2026-10-01-MASTER_BASELINE.md) · [Original CI blocker](REPORTS/2026-10-01-CI_QUALIFICATION.md) · [Qualified repairs](REPORTS/2026-10-01-AUTHORIZED_REPAIRS.md) · [Authority](../AGENTS.md)
 
 ## 1. Current Verified State
@@ -16,6 +16,7 @@ FACT: PR #28 merged after run 36904542220 (95 tests and Python/web/Compose PASS)
 FACT: DSP-008 sandbox progress heartbeat merged in PR #29 after run 36905174492: 97 tests and Python/web/Compose PASS. Full-duration hostile PDF/load evidence remains unqualified.
 FACT: DSP-006 merged in PR #30; run 36906472920 passed Python/web/Compose, 97 tests and actual two-source proxy/direct forged-header checks.
 FACT: DSP-007 merged in PR #31 after run 36907076671: 104 tests, actual Redis concurrency/expiry and Python/web/Compose/two-source proxy checks PASS.
+FACT: DSP-010 merged PR #32 after exact-head run 36909223236: hashed Python/npm locks, immutable image/action inputs, clean installs, 104 tests and Python/web/Compose PASS. [Dependencies](../docs/DEPENDENCIES.md).
 UNKNOWN: deployed instance, actual Telegram provider sends, production payment/storage/recovery and operator-browser evidence.
 Paid orders and new service activation remain off by default.
 
@@ -97,6 +98,6 @@ A customer website is not in current scope. Notification and operational control
 
 ## 12. Exact Immediate Next Round
 
-Qualify DSP-010 hashed dependency/npm locks and immutable image/action inputs; [report](REPORTS/2026-10-01-DEPENDENCY_LOCKS.md). After qualified merge, address DSP-011 admin mobile/accessibility from verified source, with browser evidence explicitly separated.
+Qualify DSP-011 admin mobile/session interaction; [report](REPORTS/2026-10-01-ADMIN_MOBILE.md). Browser evidence uses a built app with synthetic intercepted admin API; keep it separate from live provider/backend qualification.
 Actual Telegram staging still requires an authorized disposable bot/environment and provider credentials supplied through its secret store. Do not request tokens in chat or claim actual Telegram sends from mocked adapter tests.
 Keep paid orders/uploads gated until provider, safety and production qualification requirements are met.

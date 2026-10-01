@@ -1,0 +1,8 @@
+{
+  "name": "dsp-admin-browser-checks",
+  "private": true,
+  "version": "1.0.0",
+  "dependencies": {
+    "playwright-core": "1.57.0"
+  }
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 type Admin = { username: string; role: string; service_activation_enabled: boolean };
 type Overview = { orders_today: number; processing_orders: number; completed_orders: number; failed_orders: number; failed_jobs: number; failed_deliveries: number; new_custom_requests: number; reviewing_custom_requests: number; wallet_topups_today: number; failed_payments: number; backup: { status: "ok" | "missing" | "stale" | "unconfigured"; last_success_at: string | null } };
@@ -31,10 +31,22 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const [authPending, setAuthPending] = useState(false);
+  const authBusy = useRef(false);
+  const sessionEpoch = useRef(0);
+  const refreshSequence = useRef(0);
+  const clearSession = useCallback(() => {
+    setAdmin(null); setOverview(null); setAttention(null); setOrders([]);
+    setCustomRequests([]); setServices([]); setCategories([]);
+  }, []);
+
   const refresh = useCallback(async () => {
+    const epoch = sessionEpoch.current;
+    const sequence = ++refreshSequence.current;
+    const current = () => epoch === sessionEpoch.current && sequence === refreshSequence.current;
     try {
       const me = await fetch("/api/admin/me", { credentials: "same-origin", cache: "no-store" });
-      if (me.status === 401) { setAdmin(null); setOverview(null); setAttention(null); setOrders([]); setCustomRequests([]); setServices([]); setCategories([]); return; }
+      if (me.status === 401) { if (current()) clearSession(); return; }
       if (!me.ok) throw new Error("تعذر التحقق من صلاحيات الإدارة");
       const person: Admin = await me.json();
       const [stats, list, incidents, catalog, groups, requests] = await Promise.all([
@@ -46,24 +58,25 @@ export default function AdminPage() {
         fetch("/api/admin/custom-requests", { cache: "no-store" }),
       ]);
       if (!stats.ok || !list.ok || !incidents.ok || !catalog.ok || !groups.ok || !requests.ok) throw new Error("تعذر تحميل بيانات التشغيل");
-      setAdmin(person);
-      setOverview(await stats.json());
-      setOrders(await list.json());
-      setCustomRequests(await requests.json());
-      setAttention(await incidents.json());
-      setServices(await catalog.json());
-      setCategories(await groups.json());
-      setError("");
+      const [nextOverview, nextOrders, nextAttention, nextServices, nextCategories, nextRequests] = await Promise.all([
+        stats.json(), list.json(), incidents.json(), catalog.json(), groups.json(), requests.json(),
+      ]);
+      if (!current()) return;
+      setAdmin(person); setOverview(nextOverview); setOrders(nextOrders);
+      setCustomRequests(nextRequests); setAttention(nextAttention);
+      setServices(nextServices); setCategories(nextCategories); setError("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
-    } finally { setLoading(false); }
-  }, []);
+      if (current()) setError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
+    } finally { if (current()) setLoading(false); }
+  }, [clearSession]);
 
   useEffect(() => { void refresh(); }, [refresh]);
 
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError("");
+    if (authBusy.current) return;
+    authBusy.current = true;
+    setAuthPending(true); setError("");
     const form = new FormData(event.currentTarget);
     try {
       const result = await fetch("/api/admin/login", {
@@ -73,16 +86,24 @@ export default function AdminPage() {
       if (!result.ok) throw new Error(result.status === 429 ? "محاولات كثيرة، حاول بعد 15 دقيقة" : "تعذر تسجيل الدخول، تحقق من البيانات");
       await refresh();
     } catch (e) { setError(e instanceof Error ? e.message : "تعذر تسجيل الدخول"); }
+    finally { authBusy.current = false; setAuthPending(false); }
   }
 
   async function signOut() {
-    const result = await fetch("/api/admin/logout", { method: "POST", credentials: "same-origin" });
-    if (result.ok) { setAdmin(null); setOverview(null); setAttention(null); setOrders([]); setCustomRequests([]); setServices([]); setCategories([]); }
-    else setError("تعذر تسجيل الخروج");
+    if (authBusy.current) return;
+    authBusy.current = true; setAuthPending(true);
+    ++sessionEpoch.current;
+    try {
+      const result = await fetch("/api/admin/logout", { method: "POST", credentials: "same-origin" });
+      if (!result.ok) throw new Error("تعذر تسجيل الخروج");
+      clearSession(); setError("");
+    } catch { setError("تعذر تسجيل الخروج؛ حاول مرة أخرى"); }
+    finally { authBusy.current = false; setAuthPending(false); }
   }
 
   async function saveService(event: FormEvent<HTMLFormElement>, service: Service) {
     event.preventDefault();
+    const epoch = sessionEpoch.current;
     const fields = new FormData(event.currentTarget);
     const price = halalasFromInput(String(fields.get("price") ?? ""));
     if (price === null) { setError("السعر يجب أن يكون بين 0 و10,000 ريال، بدقة هللتين"); return; }
@@ -96,19 +117,22 @@ export default function AdminPage() {
           description_ar: fields.get("description"), base_price_halalas: price, enabled,
           confirm: enabled !== service.enabled }),
       });
+      if (epoch !== sessionEpoch.current) return;
       if (!result.ok) {
         if (result.status === 409) { await refresh(); throw new Error("تغيّرت الخدمة من جلسة أخرى، راجع البيانات ثم أعد الحفظ"); }
         throw new Error(result.status === 403 ? "ليس لديك صلاحية تعديل الخدمات" :
           result.status === 422 ? "التعديل غير مقبول؛ تحقق من السبب وحالة التفعيل" : "تعذر حفظ الخدمة");
       }
       const updated = await result.json();
+      if (epoch !== sessionEpoch.current) return;
       setServices(previous => previous.map(item => item.id === service.id ? { ...item, ...updated } : item));
-      setError("");
-    } catch (e) { setError(e instanceof Error ? e.message : "تعذر حفظ الخدمة"); }
+      if (epoch === sessionEpoch.current) setError("");
+    } catch (e) { if (epoch === sessionEpoch.current) setError(e instanceof Error ? e.message : "تعذر حفظ الخدمة"); }
   }
 
   async function addCategory(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const epoch = sessionEpoch.current;
     const form = event.currentTarget;
     const fields = new FormData(form);
     try {
@@ -116,14 +140,16 @@ export default function AdminPage() {
         method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ slug: fields.get("slug"), name_ar: fields.get("name_ar"), reason: fields.get("reason") }),
       });
+      if (epoch !== sessionEpoch.current) return;
       if (!result.ok) throw new Error(result.status === 409 ? "الاسم المختصر مستخدم لتصنيف مختلف" : "تعذر إنشاء التصنيف، تحقق من البيانات");
       form.reset();
       await refresh();
-    } catch (e) { setError(e instanceof Error ? e.message : "تعذر إنشاء التصنيف"); }
+    } catch (e) { if (epoch === sessionEpoch.current) setError(e instanceof Error ? e.message : "تعذر إنشاء التصنيف"); }
   }
 
   async function addService(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const epoch = sessionEpoch.current;
     const form = event.currentTarget;
     const fields = new FormData(form);
     const price = halalasFromInput(String(fields.get("price") ?? ""));
@@ -142,15 +168,17 @@ export default function AdminPage() {
           processor_type: fields.get("processor_type"), base_price_halalas: price,
           input_schema: schema, reason: fields.get("reason") }),
       });
+      if (epoch !== sessionEpoch.current) return;
       if (!result.ok) throw new Error(result.status === 409 ? "الاسم المختصر مستخدم لخدمة مختلفة" :
         result.status === 404 ? "التصنيف غير موجود؛ حدّث الصفحة" : "تعذر تسجيل الخدمة، تحقق من المدخلات");
       form.reset();
       await refresh();
-    } catch (e) { setError(e instanceof Error ? e.message : "تعذر تسجيل الخدمة"); }
+    } catch (e) { if (epoch === sessionEpoch.current) setError(e instanceof Error ? e.message : "تعذر تسجيل الخدمة"); }
   }
 
   async function triageCustomRequest(event: FormEvent<HTMLFormElement>, item: CustomRequest, action: "START_REVIEW" | "DECLINE") {
     event.preventDefault();
+    const epoch = sessionEpoch.current;
     const fields = new FormData(event.currentTarget);
     const reason = String(fields.get("reason") ?? "").trim();
     if (reason.length < 10 || reason.length > 500) { setError("سبب الإجراء يجب أن يكون بين 10 و500 حرف"); return; }
@@ -160,24 +188,25 @@ export default function AdminPage() {
         method: "PATCH", credentials: "same-origin", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ expected_revision: item.revision, action, reason }),
       });
+      if (epoch !== sessionEpoch.current) return;
       if (!result.ok) {
         if (result.status === 409) { await refresh(); throw new Error("تغيّر الطلب من جلسة أخرى، راجع البيانات المحدّثة"); }
         throw new Error(result.status === 403 ? "هذا الإجراء متاح للمالك فقط" :
           result.status === 422 ? "لا يمكن تنفيذ الإجراء في حالة الطلب الحالية" : "تعذر تحديث الطلب");
       }
       await refresh();
-      setError("");
-    } catch (e) { setError(e instanceof Error ? e.message : "تعذر تحديث الطلب"); }
+      if (epoch === sessionEpoch.current) setError("");
+    } catch (e) { if (epoch === sessionEpoch.current) setError(e instanceof Error ? e.message : "تعذر تحديث الطلب"); }
   }
 
-  const card = { border: "1px solid #d9e3e5", borderRadius: 14, padding: 20, background: "white" };
-  if (loading) return <main><p>جارٍ تحميل لوحة التشغيل…</p></main>;
+  const card = { border: "1px solid #d9e3e5", borderRadius: 14, padding: "clamp(12px, 3vw, 20px)", background: "white" };
+  if (loading) return <main><p role="status">جارٍ تحميل لوحة التشغيل…</p></main>;
   if (!admin) return <main style={{ maxWidth: 410, margin: "10vh auto" }}>
     <h1>لوحة التشغيل</h1><p>سجّل الدخول للاطلاع على الطلبات وحالة التنفيذ.</p>
     <form onSubmit={signIn} style={{ ...card, display: "grid", gap: 14 }}>
-      <label>اسم المستخدم<br /><input name="username" required autoComplete="username" style={{ width: "100%", padding: 10, boxSizing: "border-box" }} /></label>
-      <label>كلمة المرور<br /><input name="password" type="password" required autoComplete="current-password" style={{ width: "100%", padding: 10, boxSizing: "border-box" }} /></label>
-      <button type="submit" style={{ padding: 12, background: "#11484c", color: "white", border: 0, borderRadius: 8 }}>دخول</button>
+      <label>اسم المستخدم<br /><input name="username" maxLength={120} required autoComplete="username" style={{ width: "100%", padding: 10, boxSizing: "border-box" }} /></label>
+      <label>كلمة المرور<br /><input name="password" type="password" maxLength={256} required autoComplete="current-password" style={{ width: "100%", padding: 10, boxSizing: "border-box" }} /></label>
+      <button type="submit" disabled={authPending} aria-busy={authPending} style={{ padding: 12, background: "#11484c", color: "white", border: 0, borderRadius: 8 }}>{authPending ? "جارٍ الدخول…" : "دخول"}</button>
     </form>{error && <p role="alert">{error}</p>}
   </main>;
 
@@ -197,10 +226,10 @@ export default function AdminPage() {
   return <main style={{ maxWidth: 1200, margin: "auto" }}>
     <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
       <div><h1>لوحة التشغيل</h1><p>مرحبًا {admin.username} · {admin.role}</p></div>
-      <button onClick={signOut} style={{ padding: 10 }}>تسجيل الخروج</button>
+      <button onClick={signOut} disabled={authPending} aria-busy={authPending} style={{ padding: 10 }}>{authPending ? "جارٍ الخروج…" : "تسجيل الخروج"}</button>
     </header>
     {error && <p role="alert">{error}</p>}
-    <section aria-label="مؤشرات التشغيل" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 12, marginBottom: 24 }}>
+    <section aria-label="مؤشرات التشغيل" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(190px,100%),1fr))", gap: 12, marginBottom: 24 }}>
       {metrics.map(([label, value]) => <div key={label} style={card}><div>{label}</div><strong style={{ fontSize: 28 }}>{value}</strong></div>)}
     </section>
     <section style={{ ...card, marginBottom: 24, borderColor: "#bf8738" }}>
@@ -228,7 +257,10 @@ export default function AdminPage() {
         <p style={{ whiteSpace: "pre-wrap" }}>{request.description}</p>
         <small>معرّف العميل في تيليجرام: <code dir="ltr">{request.telegram_user_id}</code> · أُرسل: {new Date(request.updated_at).toLocaleString("ar-SA")}{request.reviewer_username ? ` · المراجع: ${request.reviewer_username}` : ""}</small>
         {admin.role === "OWNER" && <form onSubmit={event => void triageCustomRequest(event, request, request.status === "NEW" ? "START_REVIEW" : "DECLINE")} style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-          <input name="reason" required minLength={10} maxLength={500} placeholder={request.status === "NEW" ? "سبب بدء المراجعة" : "سبب رفض الطلب"} style={{ minWidth: 260, flex: 1 }} />
+          <label style={{ minWidth: 0, flex: "1 1 200px" }}>
+            {request.status === "NEW" ? "سبب بدء المراجعة" : "سبب رفض الطلب"}<br />
+            <input name="reason" required minLength={10} maxLength={500} />
+          </label>
           <button type="submit" style={{ padding: 9 }}>{request.status === "NEW" ? "بدء المراجعة" : "رفض الطلب"}</button>
         </form>}
       </article>)}
@@ -282,8 +314,8 @@ export default function AdminPage() {
       </details>)}
       {!services.length && <p>لا توجد خدمات مسجلة بعد.</p>}
     </section>
-    <section style={card}><h2>آخر الطلبات</h2><div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", textAlign: "right" }}>
-      <thead><tr><th>الطلب</th><th>الخدمة</th><th>الحالة</th><th>القيمة</th><th>التاريخ</th></tr></thead>
+    <section style={card}><h2>آخر الطلبات</h2><div role="region" aria-label="جدول آخر الطلبات" tabIndex={0} style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", textAlign: "right" }}>
+      <thead><tr><th scope="col">الطلب</th><th scope="col">الخدمة</th><th scope="col">الحالة</th><th scope="col">القيمة</th><th scope="col">التاريخ</th></tr></thead>
       <tbody>{orders.map(order => <tr key={order.id} style={{ borderTop: "1px solid #e6ebed" }}>
         <td style={{ padding: 12 }} dir="ltr">{order.id.slice(0, 8)}</td><td>{order.service_name}</td><td>{order.status}{order.failed_jobs > 0 ? " · مهمة فاشلة" : ""}</td>
         <td>{currency(order.price_snapshot_halalas)}</td><td>{new Date(order.created_at).toLocaleString("ar-SA")}</td>
