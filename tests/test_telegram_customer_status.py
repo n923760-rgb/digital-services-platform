@@ -7,7 +7,8 @@ from uuid import uuid4
 
 import asyncpg
 import pytest
-from platform_core.custom_requests import begin_request, draft_user_id, submit_request
+from platform_core.admin_auth import create_admin
+from platform_core.custom_requests import begin_request, draft_user_id, submit_request, triage_request
 from platform_core.customer_status import recent_telegram_requests
 from platform_core.orders import confirm_order, ensure_telegram_user
 
@@ -84,9 +85,15 @@ async def test_status_limit_and_private_triage_reason(db, monkeypatch):
     telegram_id, user_id = await customer(db)
     ids = [await review(db, user_id, str(index)) for index in range(11)]
     reason = "سبب داخلي لا يعرض على العميل"
-    await db.execute(
-        "UPDATE custom_service_requests SET status='DECLINED',decision_reason=$2 WHERE id=$1",
-        ids[-1], reason,
+    owner = await create_admin(
+        db, "owner-" + uuid4().hex, "status test owner password", role_code="OWNER",
+    )
+    await triage_request(
+        db, ids[-1], owner, expected_revision=1, action="START_REVIEW",
+        reason="مراجعة نطاق طلب الخدمة المرسل",
+    )
+    await triage_request(
+        db, ids[-1], owner, expected_revision=2, action="DECLINE", reason=reason,
     )
     records = await recent_telegram_requests(db, telegram_id)
     assert len(records) == 10 and records[0]["id"] == ids[-1]
