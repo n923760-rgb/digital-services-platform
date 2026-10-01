@@ -7,8 +7,8 @@ from uuid import uuid4
 
 import asyncpg
 import pytest
-from platform_core.customer_status import recent_telegram_requests
 from platform_core.custom_requests import begin_request, draft_user_id, submit_request
+from platform_core.customer_status import recent_telegram_requests
 from platform_core.orders import confirm_order, ensure_telegram_user
 
 from apps.telegram_bot import customer_status, main
