@@ -1,0 +1,22 @@
+name: Resolve dependency locks
+on:
+  push:
+    branches: [fix/reproducible-dependency-locks]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: pip install 'pip==25.1.1' 'pip-tools==7.5.0' 'setuptools==80.9.0' 'wheel==0.45.1'
+      - run: pip-compile --quiet --generate-hashes --strip-extras --allow-unsafe --no-emit-index-url --no-emit-trusted-host --output-file requirements/runtime.txt pyproject.toml
+      - run: pip-compile --quiet --generate-hashes --strip-extras --allow-unsafe --no-emit-index-url --no-emit-trusted-host --extra dev --constraint requirements/runtime.txt --output-file requirements/dev.txt pyproject.toml
+      - run: pip-compile --quiet --generate-hashes --allow-unsafe --no-emit-index-url --no-emit-trusted-host --output-file requirements/build.txt requirements/build.in
+      - run: python scripts/resolve_dependency_artifacts.py
