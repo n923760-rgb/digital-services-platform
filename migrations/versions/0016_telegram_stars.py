@@ -77,6 +77,29 @@ def upgrade() -> None:
         sa.CheckConstraint("status IN ('PENDING','DONE','REJECTED')", name="star_inbox_status_valid"),
     )
 
+    op.execute("""CREATE FUNCTION protect_star_invoice_snapshot() RETURNS trigger
+               LANGUAGE plpgsql AS $
+               BEGIN
+                 IF ROW(NEW.user_id,NEW.workflow_id,NEW.quote_revision,NEW.service_id,
+                        NEW.amount_stars,NEW.file_ids,NEW.terms_digest,NEW.terms_text,NEW.created_at)
+                    IS DISTINCT FROM
+                    ROW(OLD.user_id,OLD.workflow_id,OLD.quote_revision,OLD.service_id,
+                        OLD.amount_stars,OLD.file_ids,OLD.terms_digest,OLD.terms_text,OLD.created_at)
+                    OR (OLD.order_id IS NOT NULL AND NEW.order_id IS DISTINCT FROM OLD.order_id)
+                    OR (OLD.checkout_query_id IS NOT NULL
+                        AND NEW.checkout_query_id IS DISTINCT FROM OLD.checkout_query_id) THEN
+                   RAISE EXCEPTION 'Stars invoice snapshot is immutable';
+                 END IF;
+                 RETURN NEW;
+               END; $;""")
+    op.execute("""CREATE TRIGGER star_invoice_snapshot BEFORE UPDATE ON star_invoices
+               FOR EACH ROW EXECUTE FUNCTION protect_star_invoice_snapshot();""")
+    op.create_index(
+        "star_inbox_queue_idx", "telegram_payment_inbox",
+        ["bot_id", sa.text("COALESCE(attempted_at, created_at)"), "update_id"],
+        postgresql_where=sa.text("status='PENDING'"),
+    )
+
 
 def downgrade() -> None:
     # Financial history must survive rollback; revert the application with the schema intact.

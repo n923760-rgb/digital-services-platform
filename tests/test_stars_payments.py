@@ -464,3 +464,16 @@ async def test_polling_database_failure_does_not_advance_payment_offset(monkeypa
         await ui.poll_updates(bot, dispatcher)
     assert db.execute.await_count == 2
     assert dispatcher.feed_update.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_accepted_star_invoice_snapshot_cannot_be_repriced_or_rebound(db, offer):
+    with pytest.raises(asyncpg.RaiseError, match="snapshot is immutable"):
+        await db.execute("UPDATE star_invoices SET amount_stars=99 WHERE id=$1", offer.invoice.id)
+    with pytest.raises(asyncpg.RaiseError, match="snapshot is immutable"):
+        await db.execute("UPDATE star_invoices SET terms_text='changed' WHERE id=$1", offer.invoice.id)
+    await approve(db, offer)
+    with pytest.raises(asyncpg.RaiseError, match="snapshot is immutable"):
+        await db.execute("UPDATE star_invoices SET checkout_query_id='different' WHERE id=$1",
+                         offer.invoice.id)
+    assert await pay(db, offer)
