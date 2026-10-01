@@ -4,10 +4,13 @@ import logging
 import os
 import shutil
 import time
+from contextlib import suppress
 from pathlib import Path
+from threading import Event, Lock, Thread
 
 from platform_core.pdf_isolation import (
     MAX_INPUT_BYTES,
+    PDF_TIMEOUT_SECONDS,
     PDFProcessorUnavailable,
     merge_pdfs_isolated,
 )
@@ -50,22 +53,68 @@ def process_one(directory: Path) -> bool:
     return True
 
 
+
+class ProgressHeartbeat:
+    """Renew health only while the scanner or bounded parser can still make progress."""
+
+    def __init__(self, path: Path, *, interval: float = 1):
+        self.path = path
+        self.interval = interval
+        self.deadline = time.monotonic() + 10
+        self.lock = Lock()
+        self.stopped = Event()
+        self.thread = Thread(target=self._run, daemon=True)
+
+    def allow(self, seconds: float) -> None:
+        with self.lock:
+            self.deadline = time.monotonic() + seconds
+
+    def pulse(self) -> bool:
+        with self.lock:
+            if time.monotonic() >= self.deadline:
+                return False
+            self.path.touch()
+            return True
+
+    def _run(self) -> None:
+        while not self.stopped.is_set():
+            self.pulse()
+            self.stopped.wait(self.interval)
+
+    def __enter__(self):
+        self.thread.start()
+        return self
+
+    def __exit__(self, *_exc):
+        self.stopped.set()
+        self.thread.join(timeout=2)
+        with suppress(FileNotFoundError):
+            self.path.unlink()
+
+
 def serve() -> None:
     logging.basicConfig(level=logging.INFO)
     ROOT.mkdir(parents=True, exist_ok=True)
-    while True:
-        for directory in ROOT.iterdir():
-            if not directory.name.startswith("job-") or directory.is_symlink():
-                continue
-            try:
-                if time.time() - directory.stat().st_mtime > 30 * 60:
-                    shutil.rmtree(directory)
-                else:
-                    process_one(directory)
-            except (OSError, ValueError):
-                logger.exception("pdf_sandbox_request_failed")
-        Path("/tmp/pdf-sandbox-heartbeat").touch()
-        time.sleep(0.2)
+    with ProgressHeartbeat(Path("/tmp/pdf-sandbox-heartbeat")) as heartbeat:
+        while True:
+            heartbeat.allow(10)
+            for directory in ROOT.iterdir():
+                if not directory.name.startswith("job-") or directory.is_symlink():
+                    continue
+                try:
+                    if time.time() - directory.stat().st_mtime > 30 * 60:
+                        shutil.rmtree(directory)
+                    else:
+                        # Parser subprocess has its existing 75-second hard timeout.
+                        # A stuck scanner/job loses health once this progress lease expires.
+                        heartbeat.allow(PDF_TIMEOUT_SECONDS + 10)
+                        try:
+                            process_one(directory)
+                        finally:
+                            heartbeat.allow(10)
+                except (OSError, ValueError):
+                    logger.exception("pdf_sandbox_request_failed")
+            time.sleep(0.2)
 
 
 if __name__ == "__main__":
