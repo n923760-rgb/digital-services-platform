@@ -1,0 +1,7 @@
+# DSP-010 PostCSS advisory remediation
+Baseline: 08087d7f2798aad6b7d7ffe02ebc0d9fbb31f6d9. Advisory diagnosis: read-only run 36913998955 at 93288b2fcedee1b35f104f799169d203077a214a.
+FACT npm production audit: 2 affected packages (PostCSS high, Next moderate via dependency). PostCSS advisories GHSA-qx2v-qp2m-jg93, GHSA-6g55-p6wh-862q, GHSA-fxqj-rqcc-2cmp and GHSA-r28c-9q8g-f849 include CSS stringify XSS and source-map file disclosure; combined reported vulnerable range <=8.5.22. This is dependency evidence, not a claim of live exploitation or confirmed app attack path.
+Bounded remedy: exact PostCSS 8.5.23 override within major 8, targeted npm integrity lock/provenance update and production audit regression. Preserve current Next/React application versions; do not use npm audit fix --force or switch Next major merely from its suggested upgrade.
+Initial read-only generation is not installation/security/build proof. Commit complete emitted lock/hash, inspect every package version delta, remove push generation trigger, then require exact-head npm ci/audit/typecheck/build, Chromium, Python/Compose regressions before qualified merge.
+Python/image/browser/auditor locks, financial behavior and paid flags unchanged. OS/bundled/image/dev/build/runtime-provider safety remain separate qualification; advisory databases change with time. Audit tooling PR #36 remains draft pending this independently scoped remedy.
+No secrets, provider changes, deployment, production migrations or exception suppression.
