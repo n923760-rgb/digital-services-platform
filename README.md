@@ -52,3 +52,5 @@ For a public domain, set `SITE_ADDRESS` to the domain and point DNS to the host;
 The Digital Store is a separate product and does not share this wallet, orders, or database. No store integration is included in FOUNDATION-001.
 
 Known-advisory checks run against locked Python runtime and npm production dependencies in read-only CI; see [coverage and update steps](docs/DEPENDENCY-AUDIT.md). A successful scan is time-dependent and does not certify production readiness.
+
+Completed source review and qualified repairs: [Arabic review checkpoint](ENGINEERING/REPORTS/2026-10-01-POST_REPAIR_REVIEW.md), [evidence index](ENGINEERING/EVIDENCE/2026-10-01-QUALIFIED_CHANGES.md), and [remaining engineering gates](ENGINEERING/MASTER_ROADMAP.md). Telegram remains the customer channel; this repository is not a qualified paid production release.
