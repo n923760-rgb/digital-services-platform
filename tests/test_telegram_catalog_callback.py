@@ -27,7 +27,8 @@ async def test_selection_uses_callback_sender_and_rechecks_service(monkeypatch):
     begin = AsyncMock()
     answer = AsyncMock()
     monkeypatch.setattr(telegram_main, "get_settings", lambda: SimpleNamespace(
-        telegram_orders_enabled=True, database_url="postgresql+asyncpg://test"))
+        telegram_orders_enabled=True, telegram_stars_enabled=True,
+        telegram_payment_terms="Synthetic terms", telegram_payment_support="Synthetic support", database_url="postgresql+asyncpg://test"))
     monkeypatch.setattr(telegram_main.asyncpg, "connect", connect)
     monkeypatch.setattr(telegram_main, "available_services", listing)
     monkeypatch.setattr(telegram_main.pdf_workflow, "begin", begin)

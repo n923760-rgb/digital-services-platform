@@ -165,7 +165,7 @@ async def confirm_callback(callback: CallbackQuery) -> None:
 
 async def show_catalog(message: Message) -> None:
     settings = get_settings()
-    if not settings.telegram_orders_enabled:
+    if not stars_payments.checkout_enabled(settings):
         await message.answer("الخدمات قيد التجهيز حاليًا. اضغط «➕ اطلب خدمة» لإرسال وصف نصي للمراجعة.")
         return
     connection = await asyncpg.connect(settings.database_url.replace("+asyncpg", ""))
@@ -195,7 +195,7 @@ async def select_service(callback: CallbackQuery) -> None:
         await callback.answer("اختيار غير صالح.", show_alert=True)
         return
     settings = get_settings()
-    if not settings.telegram_orders_enabled:
+    if not stars_payments.checkout_enabled(settings):
         await callback.answer("الخدمات قيد التجهيز.", show_alert=True)
         return
     connection = await asyncpg.connect(settings.database_url.replace("+asyncpg", ""))

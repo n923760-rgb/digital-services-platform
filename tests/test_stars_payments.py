@@ -388,3 +388,79 @@ async def test_owned_private_invoice_has_one_xtr_price_and_empty_provider_token(
     assert invoice["payload"] == offer.invoice.payload
     assert len(invoice["payload"].encode()) <= 128
     assert invoice["start_parameter"]
+
+
+@pytest.mark.asyncio
+async def test_star_price_api_is_owner_only_strict_revisioned_and_preserves_invoice(db, offer):
+    import json
+
+    import httpx
+    from platform_core.admin_auth import authenticate, create_admin, create_session
+
+    from apps.api.admin import COOKIE_NAME
+    from apps.api.main import app
+
+    password = "isolated Stars price admin test"
+    owner_name, operator_name = "stars-owner-" + uuid4().hex, "stars-operator-" + uuid4().hex
+    owner_id = await create_admin(db, owner_name, password, role_code="OWNER")
+    await create_admin(db, operator_name, password, role_code="OPERATOR")
+    owner = await authenticate(db, owner_name, password)
+    operator = await authenticate(db, operator_name, password)
+    owner_token, operator_token = await create_session(db, owner), await create_session(db, operator)
+    revision = await db.fetchval("SELECT revision FROM services WHERE id=$1", offer.service)
+    sar_price = await db.fetchval("SELECT base_price_halalas FROM services WHERE id=$1", offer.service)
+    payload = {"expected_revision": revision, "reason": "Synthetic Stars price review",
+               "base_price_stars": 54}
+    path = f"/api/admin/services/{offer.service}"
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="https://test") as client:
+        assert (await client.patch(path, json=payload, headers={"Origin": "https://test"})).status_code == 401
+        client.cookies.set(COOKIE_NAME, operator_token)
+        assert (await client.patch(path, json=payload, headers={"Origin": "https://test"})).status_code == 403
+        client.cookies.set(COOKIE_NAME, owner_token)
+        assert (await client.patch(path, json=payload, headers={"Origin": "https://evil.test"})).status_code == 403
+        for invalid in (True, 37.5, 0, -1, 100001):
+            assert (await client.patch(path, json={**payload, "base_price_stars": invalid},
+                                       headers={"Origin": "https://test"})).status_code == 422
+        updated = await client.patch(path, json=payload, headers={"Origin": "https://test"})
+        assert updated.status_code == 200 and updated.json()["base_price_stars"] == 54
+        assert (await client.patch(path, json=payload, headers={"Origin": "https://test"})).status_code == 409
+    assert await db.fetchval("SELECT base_price_halalas FROM services WHERE id=$1", offer.service) == sar_price
+    assert await db.fetchval("SELECT amount_stars FROM star_invoices WHERE id=$1", offer.invoice.id) == 37
+    audit = json.loads(await db.fetchval(
+        "SELECT metadata FROM audit_logs WHERE actor_admin_id=$1 AND action='SERVICE_UPDATED'", owner_id,
+    ))
+    assert audit["before"]["base_price_stars"] == 37 and audit["after"]["base_price_stars"] == 54
+
+
+@pytest.mark.asyncio
+async def test_polling_database_failure_does_not_advance_payment_offset(monkeypatch):
+    event_offer = SimpleNamespace(telegram_id=42, invoice=SimpleNamespace(
+        id=uuid4(), payload="stars:" + uuid4().hex))
+    incoming = update(event_offer, 22)
+    db = SimpleNamespace(execute=AsyncMock(side_effect=[OSError("synthetic DB outage"), None]),
+                         close=AsyncMock())
+    calls = []
+    real_sleep = asyncio.sleep
+
+    async def get_updates(**kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return [incoming]
+        if len(calls) == 2:
+            assert kwargs["offset"] is None
+            return [incoming]
+        assert kwargs["offset"] == 23
+        raise asyncio.CancelledError()
+
+    async def no_backoff(delay):
+        await real_sleep(0)
+
+    bot = SimpleNamespace(id=123, get_updates=get_updates)
+    dispatcher = SimpleNamespace(resolve_used_update_types=lambda: ["message"], feed_update=AsyncMock())
+    monkeypatch.setattr(ui.asyncpg, "connect", AsyncMock(return_value=db))
+    monkeypatch.setattr(ui, "get_settings", lambda: SimpleNamespace(database_url="postgresql://test"))
+    monkeypatch.setattr(ui.asyncio, "sleep", no_backoff)
+    with pytest.raises(asyncio.CancelledError):
+        await ui.poll_updates(bot, dispatcher)
+    assert db.execute.await_count == 2
+    assert dispatcher.feed_update.await_count == 1
