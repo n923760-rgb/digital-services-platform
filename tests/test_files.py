@@ -156,3 +156,63 @@ def test_s3_delete_translates_provider_failures(failure):
     client.delete_object.side_effect = failure
     with pytest.raises(OSError, match="storage deletion unavailable"):
         S3Storage(client).delete_object(Bucket="test", Key="synthetic-key")
+
+@pytest.mark.asyncio
+async def test_cleanup_failed_full_batch_does_not_starve_later_expired_files(db):
+    user_id = await ensure_telegram_user(db, uuid4().int % (2**63 - 1) + 1)
+
+    class BlockedBatchStorage(FakeStorage):
+        def __init__(self):
+            super().__init__()
+            self.blocked_keys = set()
+            self.attempts = []
+
+        def delete_object(self, *, Bucket, Key):
+            self.attempts.append(Key)
+            if Key in self.blocked_keys:
+                raise OSError("synthetic provider outage")
+            return super().delete_object(Bucket=Bucket, Key=Key)
+
+    storage = BlockedBatchStorage()
+    blocked = [
+        await upload_file(db, storage, "test", user_id, "blocked.png", "image/png", PNG)
+        for _ in range(100)
+    ]
+    healthy = await upload_file(db, storage, "test", user_id, "healthy.png", "image/png", PNG)
+    owned_ids = [record.id for record in blocked] + [healthy.id]
+    storage.blocked_keys = {record.storage_key for record in blocked}
+    try:
+        # Ancient fixture expiries keep unrelated disposable-test rows out of the first batch.
+        await db.execute(
+            "UPDATE files SET retention_until='1990-01-01 UTC' WHERE id=ANY($1::uuid[])",
+            [record.id for record in blocked],
+        )
+        await db.execute(
+            "UPDATE files SET retention_until='1991-01-01 UTC' WHERE id=$1", healthy.id,
+        )
+        assert await cleanup_expired_files(db, storage, "test") == 0
+        assert len(storage.attempts) == 100
+        assert set(storage.attempts) == storage.blocked_keys
+        assert healthy.storage_key in storage.objects
+
+        storage.attempts.clear()
+        assert await cleanup_expired_files(db, storage, "test") >= 1
+        assert len(storage.attempts) <= 100
+        assert healthy.storage_key not in storage.objects
+        assert await db.fetchval("SELECT status FROM files WHERE id=$1", healthy.id) == "EXPIRED"
+        assert await db.fetchval(
+            "SELECT count(*) FROM files WHERE id=ANY($1::uuid[]) AND status='READY'",
+            [record.id for record in blocked],
+        ) == 100
+        assert storage.blocked_keys <= set(storage.objects)
+
+        storage.blocked_keys.clear()
+        for _ in range(3):
+            await cleanup_expired_files(db, storage, "test")
+        assert not any(record.storage_key in storage.objects for record in blocked)
+        assert await db.fetchval(
+            "SELECT count(*) FROM files WHERE id=ANY($1::uuid[]) AND status='EXPIRED'", owned_ids,
+        ) == 101
+    finally:
+        # Remove only this unreferenced fixture's metadata from the disposable test database.
+        await db.execute("DELETE FROM files WHERE id=ANY($1::uuid[])", owned_ids)
