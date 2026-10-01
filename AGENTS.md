@@ -51,12 +51,12 @@ Open a reviewable PR; leave unqualified changes as draft. Do not merge without e
 
 ## Validation
 
-Required toolchain derived from source: Python 3.12, Node 22, PostgreSQL 16, Redis, Docker Compose V2 and Linux PDF resource controls.
-Python setup: pip install -e '.[dev]'.
-Static check: ruff check apps packages tests migrations.
+Required toolchain derived from source: Python 3.12.14, Node 22.23.3, PostgreSQL 16, Redis, Docker Compose V2 and Linux PDF resource controls.
+Python setup: use the exact hashed build/dev requirements and no-dependency editable install in docs/DEPENDENCIES.md; run scripts/verify_dependency_artifacts.py and pip check. Set TEST_REDIS_URL to isolated Redis for limiter tests.
+Static check: ruff check apps packages tests migrations scripts.
 Database/test checks: alembic upgrade head; pytest -q; alembic current.
 Run database tests only against a dedicated disposable migrated PostgreSQL database; financial tests preserve history.
-Web checks in apps/web: npm install; npm run typecheck; npm run build. Dependency locking is a recorded gap, not permission to alter dependencies during unrelated work.
+Web checks in apps/web: npm ci; npm run typecheck; npm run build. Review lock/fingerprint changes only in a bounded dependency task; never bypass hash validation or use floating installs during ordinary work.
 Compose qualification follows .github/workflows/ci.yml in an isolated test deployment. Never run infrastructure/backup/restore_smoke.sh against production: it writes a seed row to its configured source DB even before creating its restore target.
 Select the smallest meaningful proof, then affected regressions. Do not claim local PASS from historical CI or a different SHA. Documentation-only edits need link/schema/diff review, not new tests that mirror prose.
 Current CI job names: python, web, compose. Reverify actual run/check names and exact source; protection is not assumed.

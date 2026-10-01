@@ -29,7 +29,7 @@ To create the first administrator after migrations, use an interactive terminal:
 
 The provider-independent payment kernel stores wallet top-up intents and signed-provider event receipts. It checks the provider, reference, amount and SAR currency before crediting once in the same database transaction. There is **no checkout endpoint, live provider adapter or public webhook**; the signature adapter in tests is only a test fixture. Do not fund customer wallets using a simulated provider. See [payment integration requirements](docs/PAYMENTS.md).
 
-To run the Python checks locally, use Python 3.12 and `pip install -e '.[dev]'`, then `ruff check apps packages tests migrations`, `alembic upgrade head`, and `pytest -q` against a dedicated test PostgreSQL database. For the web app, use Node 22, run `npm install`, `npm run typecheck`, and `npm run build` inside `apps/web`.
+To run the Python checks locally, use the locked Python toolchain and [dependency installation steps](docs/DEPENDENCIES.md), then `ruff check apps packages tests migrations scripts`, `alembic upgrade head`, and `pytest -q` against a dedicated test PostgreSQL database. For the web app, use the qualified Node version in [dependency inputs](docs/DEPENDENCIES.md), run `npm ci`, `npm run typecheck`, and `npm run build` inside `apps/web`.
 
 ## Layout
 
