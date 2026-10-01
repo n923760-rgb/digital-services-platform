@@ -2,6 +2,10 @@
 
 This repository implements the `APPROVED FOUNDATION` v1.0 specification. The final brand, domain, payment provider, AI models, S3 provider and prices remain open decisions and belong in configuration or adapters. Changes to locked decisions require a recorded architecture decision.
 
+## Current product direction and milestone scope
+
+The owner confirmed that this product serves customers through a Telegram bot. Next.js is the existing operations/admin interface. The FOUNDATION-001 acceptance text below records the historical foundation milestone; later CORE-001 source adds financial tables, PDF workflows, service administration and custom-request review. Use live source, README, subsystem contracts and ENGINEERING/MASTER_ROADMAP.md for current capability; do not treat the foundation milestone as a current assertion that those features are absent.
+
 ## Boundaries
 
 Telegram and HTTP are transport adapters. New customer channels may invoke application services but must never own the service registry, orders, jobs, pricing, wallet or templates. Domain transitions and financial ledger transactions will be implemented in `packages/python/platform_core` (or additional domain packages) in CORE-001. External AI, payment, file and notification providers require adapters. Work that takes time executes in ARQ workers. PostgreSQL holds metadata; S3-compatible storage holds customer files. The Digital Store remains independent and can only be linked to.
