@@ -10,6 +10,7 @@ from platform_core.files import InvalidFile, upload_file
 from platform_core.ledger import Balance, balance, credit
 from platform_core.orders import ensure_telegram_user
 from platform_core.telegram_workflow import (
+    StaleQuote,
     active_workflow,
     attach_pdf,
     cancel_active,
@@ -97,12 +98,18 @@ async def test_resume_upload_quote_reprice_and_confirm(db, prepared):
     await credit(db, user_id, 800, "payment:test")
     await db.execute("UPDATE services SET base_price_halalas=800 WHERE id=$1", service_id)
     with pytest.raises(ValueError, match="price changed"):
-        await confirm_pdf_merge(db, user_id, workflow.id)
+        await confirm_pdf_merge(
+            db, user_id, workflow.id, expected_quote_revision=quote.quote_revision,
+        )
     assert await db.fetchval("SELECT count(*) FROM orders WHERE user_id=$1", user_id) == 0
     quote = await quote_pdf_merge(db, user_id)
     assert quote.quoted_price_halalas == 800
-    order_id = await confirm_pdf_merge(db, user_id, workflow.id)
-    assert await confirm_pdf_merge(db, user_id, workflow.id) == order_id
+    order_id = await confirm_pdf_merge(
+        db, user_id, workflow.id, expected_quote_revision=quote.quote_revision,
+    )
+    assert await confirm_pdf_merge(
+        db, user_id, workflow.id, expected_quote_revision=quote.quote_revision,
+    ) == order_id
     assert await balance(db, user_id) == Balance(0, 800)
     assert await db.fetchval("SELECT count(*) FROM jobs WHERE order_id=$1", order_id) == 1
     assert await db.fetchval(
@@ -120,18 +127,87 @@ async def test_concurrent_confirmation_one_order(db, prepared):
     workflow = await start_pdf_merge(db, user_id)
     for index, file_id in enumerate(files, start=201):
         await attach_pdf(db, user_id, file_id, index)
-    await quote_pdf_merge(db, user_id)
+    quote = await quote_pdf_merge(db, user_id)
     await credit(db, user_id, 700, "payment:test")
     url = os.environ["DATABASE_URL"].replace("+asyncpg", "")
 
     async def confirm():
         connection = await asyncpg.connect(url)
         try:
-            return await confirm_pdf_merge(connection, user_id, workflow.id)
+            return await confirm_pdf_merge(
+                connection, user_id, workflow.id, expected_quote_revision=quote.quote_revision,
+            )
         finally:
             await connection.close()
 
     first, second = await asyncio.gather(confirm(), confirm())
     assert first == second
     assert await db.fetchval("SELECT count(*) FROM orders WHERE user_id=$1", user_id) == 1
+    assert await balance(db, user_id) == Balance(0, 700)
+
+
+@pytest.mark.asyncio
+async def test_old_price_button_cannot_confirm_new_quote(db, prepared):
+    user_id, service_id, files = prepared
+    workflow = await start_pdf_merge(db, user_id)
+    for index, file_id in enumerate(files, start=301):
+        await attach_pdf(db, user_id, file_id, index)
+    old_quote = await quote_pdf_merge(db, user_id)
+    await credit(db, user_id, 1000, "payment:old-quote-test")
+    await db.execute("UPDATE services SET base_price_halalas=800 WHERE id=$1", service_id)
+    new_quote = await quote_pdf_merge(db, user_id)
+
+    with pytest.raises(StaleQuote):
+        await confirm_pdf_merge(
+            db, user_id, workflow.id, expected_quote_revision=old_quote.quote_revision,
+        )
+    assert await balance(db, user_id) == Balance(1000, 0)
+    assert await db.fetchval("SELECT count(*) FROM orders WHERE user_id=$1", user_id) == 0
+    order_id = await confirm_pdf_merge(
+        db, user_id, workflow.id, expected_quote_revision=new_quote.quote_revision,
+    )
+    with pytest.raises(StaleQuote):
+        await confirm_pdf_merge(
+            db, user_id, workflow.id, expected_quote_revision=old_quote.quote_revision,
+        )
+    assert await confirm_pdf_merge(
+        db, user_id, workflow.id, expected_quote_revision=new_quote.quote_revision,
+    ) == order_id
+    assert await balance(db, user_id) == Balance(200, 800)
+
+
+@pytest.mark.asyncio
+async def test_changed_inputs_invalidate_old_offer_and_quote_is_customer_owned(db, prepared):
+    user_id, _, files = prepared
+    workflow = await start_pdf_merge(db, user_id)
+    for index, file_id in enumerate(files, start=401):
+        await attach_pdf(db, user_id, file_id, index)
+    old_quote = await quote_pdf_merge(db, user_id)
+    await credit(db, user_id, 700, "payment:input-change-test")
+    third = await upload_file(
+        db, MemoryStorage(), "test", user_id, "third.pdf", "application/pdf", b"%PDF-third",
+    )
+    await attach_pdf(db, user_id, third.id, 403)
+    with pytest.raises(StaleQuote):
+        await confirm_pdf_merge(
+            db, user_id, workflow.id, expected_quote_revision=old_quote.quote_revision,
+        )
+    fresh_quote = await quote_pdf_merge(db, user_id)
+    with pytest.raises(StaleQuote):
+        await confirm_pdf_merge(
+            db, user_id, workflow.id, expected_quote_revision=old_quote.quote_revision,
+        )
+    other_user = await ensure_telegram_user(db, uuid4().int % (2**63 - 1) + 1)
+    with pytest.raises(ValueError, match="workflow not found"):
+        await confirm_pdf_merge(
+            db, other_user, workflow.id, expected_quote_revision=fresh_quote.quote_revision,
+        )
+    assert await balance(db, user_id) == Balance(700, 0)
+    assert await db.fetchval("SELECT count(*) FROM orders WHERE user_id=$1", user_id) == 0
+    order_id = await confirm_pdf_merge(
+        db, user_id, workflow.id, expected_quote_revision=fresh_quote.quote_revision,
+    )
+    assert await db.fetchval(
+        "SELECT count(*) FROM order_files WHERE order_id=$1", order_id,
+    ) == 3
     assert await balance(db, user_id) == Balance(0, 700)

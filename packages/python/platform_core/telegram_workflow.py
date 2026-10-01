@@ -10,17 +10,22 @@ from platform_core.ledger import _lock_wallet
 from platform_core.orders import confirm_order
 
 
+class StaleQuote(ValueError):
+    pass
+
+
 @dataclass(frozen=True)
 class Workflow:
     id: UUID
     status: str
     file_count: int
     quoted_price_halalas: int | None
+    quote_revision: int = 0
 
 
 async def active_workflow(connection: asyncpg.Connection, user_id: UUID) -> Workflow | None:
     row = await connection.fetchrow(
-        """SELECT w.id,w.status,w.quoted_price_halalas,
+        """SELECT w.id,w.status,w.quoted_price_halalas,w.quote_revision,
            (SELECT count(*) FROM telegram_workflow_files f WHERE f.workflow_id=w.id) AS file_count
            FROM telegram_workflows w WHERE w.user_id=$1
            AND w.status IN ('COLLECTING','CONFIRMING')""",
@@ -28,7 +33,10 @@ async def active_workflow(connection: asyncpg.Connection, user_id: UUID) -> Work
     )
     if not row:
         return None
-    return Workflow(row["id"], row["status"], row["file_count"], row["quoted_price_halalas"])
+    return Workflow(
+        row["id"], row["status"], row["file_count"], row["quoted_price_halalas"],
+        row["quote_revision"],
+    )
 
 
 async def start_pdf_merge(connection: asyncpg.Connection, user_id: UUID) -> Workflow:
@@ -70,7 +78,7 @@ async def attach_pdf(
         raise ValueError("invalid Telegram message ID")
     async with connection.transaction():
         row = await connection.fetchrow(
-            """SELECT w.id,w.status,s.input_schema FROM telegram_workflows w
+            """SELECT w.id,w.status,w.quote_revision,s.input_schema FROM telegram_workflows w
                JOIN services s ON s.id=w.service_id WHERE w.user_id=$1
                AND w.status IN ('COLLECTING','CONFIRMING') FOR UPDATE OF w""",
             user_id,
@@ -108,9 +116,9 @@ async def attach_pdf(
         )
         await connection.execute(
             """UPDATE telegram_workflows SET status='COLLECTING',quoted_price_halalas=NULL,
-               updated_at=now() WHERE id=$1""", row["id"],
+               quote_revision=quote_revision+1,updated_at=now() WHERE id=$1""", row["id"],
         )
-        return Workflow(row["id"], "COLLECTING", count + 1, None)
+        return Workflow(row["id"], "COLLECTING", count + 1, None, row["quote_revision"] + 1)
 
 
 async def quote_pdf_merge(connection: asyncpg.Connection, user_id: UUID) -> Workflow:
@@ -133,26 +141,32 @@ async def quote_pdf_merge(connection: asyncpg.Connection, user_id: UUID) -> Work
         if not schema.get("min_files", 0) <= count <= schema.get("max_files", 0):
             raise ValueError("more PDF files are required")
         price = row["base_price_halalas"]
-        await connection.execute(
+        revision = await connection.fetchval(
             """UPDATE telegram_workflows SET status='CONFIRMING',quoted_price_halalas=$2,
-               updated_at=now() WHERE id=$1""",
+               quote_revision=quote_revision+1,updated_at=now() WHERE id=$1
+               RETURNING quote_revision""",
             row["id"], price,
         )
-        return Workflow(row["id"], "CONFIRMING", count, price)
+        return Workflow(row["id"], "CONFIRMING", count, price, revision)
 
 
 async def confirm_pdf_merge(
     connection: asyncpg.Connection, user_id: UUID, workflow_id: UUID,
+    *, expected_quote_revision: int,
 ) -> UUID:
+    if type(expected_quote_revision) is not int or expected_quote_revision < 1:
+        raise StaleQuote("invalid quote revision; review the offer again")
     async with connection.transaction():
         await _lock_wallet(connection, user_id)
         row = await connection.fetchrow(
-            """SELECT id,service_id,status,quoted_price_halalas,order_id
+            """SELECT id,service_id,status,quoted_price_halalas,quote_revision,order_id
                FROM telegram_workflows WHERE id=$1 AND user_id=$2 FOR UPDATE""",
             workflow_id, user_id,
         )
         if not row:
             raise ValueError("workflow not found")
+        if row["quote_revision"] != expected_quote_revision:
+            raise StaleQuote("quote changed; review the offer again")
         if row["status"] == "SUBMITTED":
             return row["order_id"]
         if row["status"] != "CONFIRMING" or row["quoted_price_halalas"] is None:
