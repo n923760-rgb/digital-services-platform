@@ -1,6 +1,7 @@
-"""Authenticated, read-only operations API; permissions are always checked server-side."""
+"""Authenticated operations API; permissions are always checked server-side."""
 
 from contextlib import asynccontextmanager
+from datetime import datetime
 from typing import Any, Literal
 from urllib.parse import urlsplit
 from uuid import UUID
@@ -219,14 +220,23 @@ async def orders(_admin: AdminIdentity = VIEW_DEPENDENCY):
 
 
 @router.get("/custom-requests")
-async def custom_requests(_admin: AdminIdentity = VIEW_DEPENDENCY):
+async def custom_requests(
+    before_updated_at: datetime | None = None,
+    before_id: UUID | None = None,
+    _admin: AdminIdentity = VIEW_DEPENDENCY,
+):
+    if (before_updated_at is None) != (before_id is None):
+        raise HTTPException(422, "Both cursor fields are required")
+    if before_updated_at is not None and before_updated_at.utcoffset() is None:
+        raise HTTPException(422, "Cursor timestamp must include timezone")
     async with database() as db:
         rows = await db.fetch("""SELECT r.id,r.description,r.status,r.revision,
           r.created_at,r.updated_at,u.telegram_user_id,a.username AS reviewer_username
           FROM custom_service_requests r JOIN users u ON u.id=r.user_id
           LEFT JOIN admins a ON a.id=r.reviewed_by_admin_id
           WHERE r.status IN ('NEW','IN_REVIEW')
-          ORDER BY r.updated_at DESC,r.id DESC LIMIT 50""")
+            AND ($1::timestamptz IS NULL OR (r.updated_at,r.id)<($1,$2::uuid))
+          ORDER BY r.updated_at DESC,r.id DESC LIMIT 50""", before_updated_at, before_id)
     return [{**dict(row), "id": str(row["id"])} for row in rows]
 
 

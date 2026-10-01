@@ -25,6 +25,10 @@ export default function AdminPage() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [customRequests, setCustomRequests] = useState<CustomRequest[]>([]);
+  const [hasOlderRequests, setHasOlderRequests] = useState(false);
+  const [olderRequestPage, setOlderRequestPage] = useState(false);
+  const [requestPagePending, setRequestPagePending] = useState(false);
+  const requestPageBusy = useRef(false);
   const [attention, setAttention] = useState<Attention | null>(null);
   const [services, setServices] = useState<Service[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -36,8 +40,10 @@ export default function AdminPage() {
   const sessionEpoch = useRef(0);
   const refreshSequence = useRef(0);
   const clearSession = useCallback(() => {
+    ++sessionEpoch.current; setLoading(false);
     setAdmin(null); setOverview(null); setAttention(null); setOrders([]);
-    setCustomRequests([]); setServices([]); setCategories([]);
+    setCustomRequests([]); setHasOlderRequests(false); setOlderRequestPage(false);
+    setServices([]); setCategories([]);
   }, []);
 
   const refresh = useCallback(async () => {
@@ -63,7 +69,8 @@ export default function AdminPage() {
       ]);
       if (!current()) return;
       setAdmin(person); setOverview(nextOverview); setOrders(nextOrders);
-      setCustomRequests(nextRequests); setAttention(nextAttention);
+      setCustomRequests(nextRequests); setHasOlderRequests(nextRequests.length === 50);
+      setOlderRequestPage(false); setAttention(nextAttention);
       setServices(nextServices); setCategories(nextCategories); setError("");
     } catch (e) {
       if (current()) setError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
@@ -71,6 +78,32 @@ export default function AdminPage() {
   }, [clearSession]);
 
   useEffect(() => { void refresh(); }, [refresh]);
+
+  async function loadRequestPage(older: boolean) {
+    if (requestPageBusy.current || authBusy.current) return;
+    const last = customRequests.at(-1);
+    if (older && !last) return;
+    requestPageBusy.current = true; setRequestPagePending(true);
+    const epoch = sessionEpoch.current;
+    const sequence = refreshSequence.current;
+    const current = () => epoch === sessionEpoch.current && sequence === refreshSequence.current;
+    try {
+      const query = older && last ? "?" + new URLSearchParams({
+        before_updated_at: last.updated_at, before_id: last.id,
+      }) : "";
+      const result = await fetch("/api/admin/custom-requests" + query, { cache: "no-store" });
+      if (!current()) return;
+      if (result.status === 401) { clearSession(); return; }
+      if (!result.ok) throw new Error("تعذر تحميل صفحة الطلبات؛ حاول مرة أخرى");
+      const next: CustomRequest[] = await result.json();
+      if (!current()) return;
+      setHasOlderRequests(next.length === 50);
+      if (next.length || !older) { setCustomRequests(next); setOlderRequestPage(older); }
+      setError("");
+    } catch (e) {
+      if (current()) setError(e instanceof Error ? e.message : "تعذر تحميل صفحة الطلبات");
+    } finally { requestPageBusy.current = false; setRequestPagePending(false); }
+  }
 
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -269,6 +302,11 @@ export default function AdminPage() {
         </form>}
       </article>)}
       {!customRequests.length && <p>لا توجد طلبات جديدة.</p>}
+      <nav aria-label="صفحات طلبات الخدمات" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {hasOlderRequests && <button onClick={() => void loadRequestPage(true)} disabled={requestPagePending || authPending}>عرض طلبات أقدم</button>}
+        {olderRequestPage && <button onClick={() => void loadRequestPage(false)} disabled={requestPagePending || authPending}>العودة لأحدث الطلبات</button>}
+      </nav>
+      {requestPagePending && <p role="status">جارٍ تحميل صفحة الطلبات…</p>}
     </section>
     <section style={{ ...card, marginBottom: 24 }} aria-label="كتالوج الخدمات">
       <h2>الخدمات</h2>
