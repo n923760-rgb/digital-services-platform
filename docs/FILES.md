@@ -28,3 +28,7 @@ The PDF processor independently checks every ordered input before a storage HEAD
 Each read then rechecks current owner/readiness/expiry and metadata size against the smaller of the per-file cap and remaining 40 MiB budget. Object HEAD size must match metadata; GET requests only that bounded size plus the adapter's one-byte overrun sentinel. Size mismatch fails without invoking either parser or creating output. Callers of read_file/verify_file can opt into a max_bytes guard; existing callers without it retain their behavior.
 
 These are raw input byte bounds, not a measured process RSS guarantee. The parent still retains accepted documents in memory; parser copies, output, decompression and concurrent processes require their existing sandbox limits and separate load qualification. PDF parsing and output validation remain in the existing isolated execution path.
+
+## Sandbox liveness during bounded processing
+
+The scanner now renews its heartbeat on a separate daemon thread while a parser job holds a bounded progress lease (existing 75-second parser timeout plus ten seconds for local IPC). The scanner renews only a ten-second lease between jobs. A blocked scan or job that outlives its lease stops touching the heartbeat; shutdown removes the marker. This keeps normal long processing from producing false stale health while preserving detection of stalls. Container health does not automatically restart unhealthy containers; operators still need monitoring/recovery. No parser/container privilege, CPU, memory, network or timeout limit is relaxed.

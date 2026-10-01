@@ -2,8 +2,10 @@
 
 import asyncio
 from io import BytesIO
+from threading import Event, get_ident
 
 import pytest
+from platform_core import pdf_sandbox
 from platform_core.pdf_isolation import PDFProcessorUnavailable
 from platform_core.pdf_merge import InvalidPDF
 from platform_core.pdf_sandbox import process_one
@@ -57,3 +59,48 @@ def test_unavailable_sandbox_times_out_and_cleans_up(tmp_path):
     assert list(tmp_path.iterdir()) == []
     with pytest.raises(PDFProcessorUnavailable, match="not configured"):
         merge_pdfs_in_sandbox([blank_pdf(), blank_pdf()], "")
+
+
+def test_heartbeat_runs_while_bounded_job_blocks_the_scanner(monkeypatch):
+    clock = [0.0]
+    renewed = Event()
+    touches = []
+    removed = []
+    monkeypatch.setattr(pdf_sandbox.time, "monotonic", lambda: clock[0])
+
+    class HeartbeatFile:
+        def touch(self):
+            touches.append((clock[0], get_ident()))
+            if clock[0] == 20:
+                renewed.set()
+
+        def unlink(self):
+            removed.append(True)
+
+    heartbeat = pdf_sandbox.ProgressHeartbeat(HeartbeatFile(), interval=0.01)
+    with heartbeat:
+        heartbeat.allow(85)
+        # The scanner is blocked beyond the old ten-second health freshness window.
+        clock[0] = 20
+        assert renewed.wait(timeout=1)
+        assert touches[-1][1] != get_ident()
+    assert not heartbeat.thread.is_alive() and removed == [True]
+
+
+def test_heartbeat_stops_after_job_deadline_and_idle_stall(monkeypatch, tmp_path):
+    clock = [0.0]
+    monkeypatch.setattr(pdf_sandbox.time, "monotonic", lambda: clock[0])
+    path = tmp_path / "heartbeat"
+    heartbeat = pdf_sandbox.ProgressHeartbeat(path)
+    heartbeat.allow(85)
+    clock[0] = 75
+    assert heartbeat.pulse() and path.is_file()
+    previous = path.stat().st_mtime_ns
+    clock[0] = 85
+    assert not heartbeat.pulse() and path.stat().st_mtime_ns == previous
+    # Completing the job grants only the short idle progress window.
+    heartbeat.allow(10)
+    clock[0] = 94
+    assert heartbeat.pulse()
+    clock[0] = 95
+    assert not heartbeat.pulse()
