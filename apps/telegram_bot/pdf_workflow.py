@@ -14,6 +14,7 @@ from platform_core.ledger import IdempotencyConflict, InsufficientFunds
 from platform_core.orders import ensure_telegram_user
 from platform_core.storage_s3 import S3Storage
 from platform_core.telegram_workflow import (
+    StaleQuote,
     active_workflow,
     attach_pdf,
     cancel_active,
@@ -47,9 +48,12 @@ def storage_client() -> S3Storage:
     ))
 
 
-def quote_keyboard(workflow_id: UUID) -> InlineKeyboardMarkup:
+def quote_keyboard(workflow_id: UUID, quote_revision: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="✅ تأكيد الطلب", callback_data=f"merge:confirm:{workflow_id}"),
+        InlineKeyboardButton(
+            text="✅ تأكيد الطلب",
+            callback_data=f"merge:confirm:{workflow_id.hex}:{quote_revision}",
+        ),
     ]])
 
 
@@ -85,7 +89,7 @@ async def show_quote(message: Message, connection: asyncpg.Connection, user_id: 
     price = f"{workflow.quoted_price_halalas / 100:.2f} ر.س"
     await message.answer(
         f"دمج {workflow.file_count} ملفات PDF. السعر: {price}. تؤكد الطلب؟",
-        reply_markup=quote_keyboard(workflow.id),
+        reply_markup=quote_keyboard(workflow.id, workflow.quote_revision),
     )
 
 
@@ -140,19 +144,26 @@ async def upload(message: Message, bot: Bot) -> None:
         await connection.close()
 
 
-async def confirm(message: Message, workflow_id: UUID, telegram_user_id: int) -> None:
+async def confirm(
+    message: Message, workflow_id: UUID, telegram_user_id: int, quote_revision: int,
+) -> None:
     if not settings.telegram_orders_enabled:
         await message.answer("الطلبات غير متاحة حاليًا.")
         return
     connection = await asyncpg.connect(settings.database_url.replace("+asyncpg", ""))
     try:
         user_id = await ensure_telegram_user(connection, telegram_user_id)
-        order_id = await confirm_pdf_merge(connection, user_id, workflow_id)
+        order_id = await confirm_pdf_merge(
+            connection, user_id, workflow_id, expected_quote_revision=quote_revision,
+        )
         await message.answer(f"تم تسجيل طلبك ✅ رقم الطلب: {order_id}")
     except InsufficientFunds:
         await message.answer("رصيدك غير كافٍ. لم يُنشأ الطلب ولم يُخصم أي مبلغ.")
     except IdempotencyConflict:
         await message.answer("هذا التأكيد يخص طلبًا مختلفًا. افتح طلبًا جديدًا.")
+    except StaleQuote:
+        await message.answer("هذا التأكيد يخص عرضًا قديمًا. راجع العرض الحالي وأكد من زره الجديد.")
+        await show_quote(message, connection, user_id)
     except ValueError as exc:
         if "price changed" in str(exc):
             await message.answer("تغير السعر. راجع السعر الجديد وأكد مرة أخرى.")
