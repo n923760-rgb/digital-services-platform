@@ -24,14 +24,15 @@ from platform_core.orders import ensure_telegram_user
 from platform_core.service_catalog import available_services
 from platform_core.telegram_workflow import active_workflow
 
-from apps.telegram_bot import custom_request_ui, customer_files, pdf_workflow
+from apps.telegram_bot import custom_request_ui, customer_files, customer_status, pdf_workflow
 
 logger = logging.getLogger(__name__)
 dispatcher = Dispatcher()
 keyboard = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="✨ الخدمات"), KeyboardButton(text="🧰 الأدوات")],
-        [KeyboardButton(text="➕ اطلب خدمة"), KeyboardButton(text="📁 ملفاتي")],
+        [KeyboardButton(text="➕ اطلب خدمة"), KeyboardButton(text="📋 طلباتي")],
+        [KeyboardButton(text="📁 ملفاتي")],
         [KeyboardButton(text="💰 رصيدي"), KeyboardButton(text="🛒 المتجر الرقمي")],
     ],
     resize_keyboard=True,
@@ -50,9 +51,12 @@ async def start(message: Message) -> None:
     if message.chat.type != "private" or message.from_user is None:
         return
     await message.answer(
-        "أهلًا 👋\nوش تحتاج أسوي لك؟\n"
-        "اكتب طلبك مباشرة، أو أرسل صورة، ملف، رابط أو تسجيل صوتي.\n"
-        "الخدمات الجاهزة قيد التجهيز حاليًا؛ يمكنك إرسال طلب خدمة للمراجعة.",
+        "أهلًا 👋\nاضغط «➕ اطلب خدمة» ثم اكتب وصفًا نصيًا في رسالة واحدة للمراجعة.\n"
+        "الصور والتسجيلات والمرفقات غير مدعومة في طلب المراجعة. "
+        "الروابط داخل الوصف تُحفظ كنص ولا تُفتح تلقائيًا.\n"
+        + ("لدمج ملفات PDF اختر «🔗 دمج PDF» أولًا.\n"
+           if get_settings().telegram_orders_enabled else "الخدمات الجاهزة قيد التجهيز حاليًا.\n")
+        + "لمتابعة حالة الطلبات اختر «📋 طلباتي».",
         reply_markup=merge_keyboard if get_settings().telegram_orders_enabled else keyboard,
     )
     settings = get_settings()
@@ -92,6 +96,14 @@ async def cancel_command(message: Message) -> None:
 @dispatcher.message(F.document)
 async def document_message(message: Message, bot: Bot) -> None:
     if message.chat.type == "private" and message.from_user:
+        connection = await asyncpg.connect(get_settings().database_url.replace("+asyncpg", ""))
+        try:
+            collecting = await draft_user_id(connection, message.from_user.id)
+        finally:
+            await connection.close()
+        if collecting:
+            await message.answer("طلب المراجعة يقبل وصفًا نصيًا فقط. اكتب التفاصيل أو اكتب «إلغاء».")
+            return
         await pdf_workflow.upload(message, bot)
 
 
@@ -118,7 +130,7 @@ async def confirm_callback(callback: CallbackQuery) -> None:
 async def show_catalog(message: Message) -> None:
     settings = get_settings()
     if not settings.telegram_orders_enabled:
-        await message.answer("الخدمات قيد التجهيز حاليًا. اكتب طلبك، وسنعلن إتاحتها هنا قريبًا.")
+        await message.answer("الخدمات قيد التجهيز حاليًا. اضغط «➕ اطلب خدمة» لإرسال وصف نصي للمراجعة.")
         return
     connection = await asyncpg.connect(settings.database_url.replace("+asyncpg", ""))
     try:
@@ -132,7 +144,7 @@ async def show_catalog(message: Message) -> None:
         text=f"{service.name_ar[:32]} · {service.price_halalas / 100:.2f} ر.س",
         callback_data=f"catalog:select:{service.id}",
     )] for service in services]
-    await message.answer("اختر الخدمة أو اكتب طلبك مباشرة:",
+    await message.answer("اختر الخدمة؛ ولطلب المراجعة استخدم «➕ اطلب خدمة»:",
                          reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
 
 
@@ -180,6 +192,8 @@ async def text_message(message: Message) -> None:
             await pdf_workflow.cancel(message)
     elif content in {"✨ الخدمات", "🧰 الأدوات"}:
         await show_catalog(message)
+    elif content == "📋 طلباتي":
+        await customer_status.show_requests(message)
     elif content == "📁 ملفاتي":
         await customer_files.show_files(message)
     elif content == "✅ مراجعة السعر":
@@ -196,7 +210,7 @@ async def text_message(message: Message) -> None:
         finally:
             await connection.close()
     elif content == "🛒 المتجر الرقمي":
-        await message.answer("رابط المتجر الرقمي سيتوفر قريبًا.")
+        await message.answer("المتجر الرقمي غير مرتبط بهذا البوت حاليًا.")
     elif await custom_request_ui.submit_if_collecting(message):
         return
     elif content == "🔗 دمج pdf" or ("pdf" in content and any(
@@ -205,6 +219,16 @@ async def text_message(message: Message) -> None:
         await pdf_workflow.begin(message)
     else:
         await message.answer("الخدمات الجاهزة قيد التجهيز. اضغط «➕ اطلب خدمة» لإرسال طلب للمراجعة.")
+
+
+@dispatcher.message()
+async def unsupported_message(message: Message) -> None:
+    if message.chat.type != "private" or message.from_user is None:
+        return
+    await message.answer(
+        "هذا النوع من الرسائل غير مدعوم. لطلب المراجعة اختر «➕ اطلب خدمة» "
+        "واكتب وصفًا نصيًا؛ الصور والتسجيلات الصوتية لا تُعالج."
+    )
 
 
 async def heartbeat() -> None:
