@@ -1,6 +1,6 @@
 """Translate provider-specific S3 errors at the file storage boundary."""
 
-from botocore.exceptions import ClientError
+from botocore.exceptions import BotoCoreError, ClientError
 
 
 class S3Storage:
@@ -28,4 +28,7 @@ class S3Storage:
             raise
 
     def delete_object(self, *, Bucket: str, Key: str) -> object:
-        return self.client.delete_object(Bucket=Bucket, Key=Key)
+        try:
+            return self.client.delete_object(Bucket=Bucket, Key=Key)
+        except (BotoCoreError, ClientError) as exc:
+            raise OSError("storage deletion unavailable") from exc

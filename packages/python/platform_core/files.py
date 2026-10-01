@@ -10,7 +10,6 @@ from uuid import UUID, uuid4
 
 import asyncpg
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -152,7 +151,7 @@ async def cleanup_expired_files(connection: asyncpg.Connection, storage: Storage
         for row in rows:
             try:
                 await asyncio.to_thread(storage.delete_object, Bucket=bucket, Key=row["storage_key"])
-            except Exception:
+            except OSError:
                 # Provider messages can contain keys, credentials or URLs; record only our metadata ID.
                 logger.warning("file_cleanup_delete_failed", extra={"file_id": str(row["id"])})
                 continue
