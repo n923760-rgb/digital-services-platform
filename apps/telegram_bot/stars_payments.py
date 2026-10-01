@@ -6,7 +6,14 @@ import logging
 
 import asyncpg
 from aiogram import Bot
-from aiogram.types import CallbackQuery, LabeledPrice, Message, PreCheckoutQuery, TransactionPartnerUser
+from aiogram.exceptions import TelegramAPIError
+from aiogram.types import (
+    CallbackQuery,
+    LabeledPrice,
+    Message,
+    PreCheckoutQuery,
+    TransactionPartnerUser,
+)
 from platform_core.config import get_settings
 from platform_core.orders import ensure_telegram_user
 from platform_core.stars_inbox import persist_payment_update, process_payment_inbox
@@ -63,7 +70,7 @@ async def invoice(callback: CallbackQuery, bot: Bot) -> None:
         )
     except (ValueError, StaleQuote):
         await callback.message.answer("تغير العرض أو انتهى. راجع السعر والشروط وأكد من الزر الجديد.")
-    except Exception:
+    except (TelegramAPIError, asyncpg.PostgresError, OSError):
         logger.warning("star_invoice_unavailable")
         await callback.message.answer("تعذر إرسال الفاتورة مؤقتًا. حاول مرة أخرى.")
     finally:
@@ -87,7 +94,7 @@ async def precheckout(query: PreCheckoutQuery) -> None:
                     query.total_amount, query.id, terms_digest(settings),
                 )
                 accepted = True
-    except Exception:
+    except (ValueError, asyncpg.PostgresError, OSError):
         logger.warning("star_checkout_rejected")
     finally:
         if connection is not None:
@@ -105,32 +112,46 @@ async def payment_notice(message: Message) -> None:
 
 
 async def poll_updates(bot: Bot, dispatcher) -> None:
-    """Advance getUpdates offset only after durable receipt insertion, even if handlers fail."""
+    """Persist billing before acknowledgement; keep slow ordinary handlers off polling."""
     offset = None
     settings = get_settings()
-    while True:
-        try:
-            updates = await bot.get_updates(
-                offset=offset, timeout=25, allowed_updates=dispatcher.resolve_used_update_types(),
-            )
-            for update in updates:
-                message = update.message
-                if message and (message.successful_payment or message.refunded_payment):
-                    connection = await asyncpg.connect(settings.database_url.replace("+asyncpg", ""))
-                    try:
-                        await persist_payment_update(connection, bot.id, update)
-                    finally:
-                        await connection.close()
-                try:
-                    await dispatcher.feed_update(bot, update)
-                except Exception:
-                    logger.warning("telegram_update_handler_failed")
-                offset = update.update_id + 1
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            logger.warning("telegram_poll_retry")
-            await asyncio.sleep(2)
+    pending = set()
+
+    def handler_done(task):
+        pending.discard(task)
+        if not task.cancelled() and task.exception() is not None:
+            logger.warning("telegram_update_handler_failed")
+
+    try:
+        while True:
+            try:
+                updates = await bot.get_updates(
+                    offset=offset, timeout=25, allowed_updates=dispatcher.resolve_used_update_types(),
+                )
+                for update in updates:
+                    message = update.message
+                    if message and (message.successful_payment or message.refunded_payment):
+                        connection = await asyncpg.connect(
+                            settings.database_url.replace("+asyncpg", ""),
+                        )
+                        try:
+                            await persist_payment_update(connection, bot.id, update)
+                        finally:
+                            await connection.close()
+                    task = asyncio.create_task(dispatcher.feed_update(bot, update))
+                    pending.add(task)
+                    task.add_done_callback(handler_done)
+                    offset = update.update_id + 1
+                # Like aiogram's default task dispatch, uploads do not block checkout processing.
+                await asyncio.sleep(0)
+            except (TelegramAPIError, asyncpg.PostgresError, OSError):
+                logger.warning("telegram_poll_retry")
+                await asyncio.sleep(2)
+    finally:
+        tasks = list(pending)
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 async def reconcile_refund(bot, connection, row) -> bool:
@@ -171,12 +192,12 @@ async def process_refunds(bot, connection) -> int:
                 ok = await bot.refund_star_payment(
                     user_id=row["telegram_user_id"], telegram_payment_charge_id=row["charge_id"],
                 )
-        except Exception:
+        except (TelegramAPIError, OSError):
             # A timeout/crash may follow provider success. Use positive transaction evidence.
             try:
                 async with asyncio.timeout(8):
                     ok = await reconcile_refund(bot, connection, row)
-            except Exception:
+            except (TelegramAPIError, OSError):
                 ok = False
         if ok is True:
             await confirm_star_refund(

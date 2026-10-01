@@ -238,8 +238,8 @@ async def test_terminal_failure_requests_real_stars_refund_not_sar_release(db, o
 
 
 def update(offer, update_id, *, refunded=False):
-    data = dict(currency="XTR", total_amount=37, invoice_payload=offer.invoice.payload,
-                telegram_payment_charge_id=str(offer.invoice.id), provider_payment_charge_id="")
+    data = {"currency": "XTR", "total_amount": 37, "invoice_payload": offer.invoice.payload,
+            "telegram_payment_charge_id": str(offer.invoice.id), "provider_payment_charge_id": ""}
     receipt = RefundedPayment(**data) if refunded else SuccessfulPayment(**data)
     message = Message(
         message_id=update_id, date=datetime.now(UTC),
