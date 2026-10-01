@@ -10,6 +10,7 @@ from arq.connections import RedisSettings
 from arq.cron import cron
 
 from apps.telegram_bot.delivery import send_result
+from apps.telegram_bot.stars_payments import process_billing
 from platform_core.config import get_settings
 from platform_core.delivery import (
     claim_delivery,
@@ -105,6 +106,19 @@ async def recover_deliveries(ctx) -> None:
         await connection.close()
 
 
+async def stars_billing(ctx) -> None:
+    # Process already collected receipts/refunds even when new checkout is disabled.
+    if not settings.telegram_bot_token:
+        return
+    connection = await asyncpg.connect(settings.database_url.replace("+asyncpg", ""))
+    bot = Bot(token=settings.telegram_bot_token)
+    try:
+        await process_billing(connection, bot, settings)
+    finally:
+        await bot.session.close()
+        await connection.close()
+
+
 async def cleanup_files(ctx) -> None:
     connection = await asyncpg.connect(settings.database_url.replace("+asyncpg", ""))
     try:
@@ -173,6 +187,7 @@ class WorkerSettings:
     max_jobs = 1
     cron_jobs: ClassVar[list] = [
         cron(worker_heartbeat, second={0, 30}),
+        cron(stars_billing, second={20, 50}),
         cron(dispatch_pending, second={5, 35}),
         cron(recover_processing, second={15, 45}),
         cron(dispatch_deliveries, second={10, 40}),

@@ -113,7 +113,7 @@ async def acknowledge_delivery(
     async with connection.transaction():
         await _lock_wallet(connection, user_id)
         order = await connection.fetchrow(
-            """SELECT status,delivery_receipt,price_snapshot_halalas FROM orders
+            """SELECT status,delivery_receipt,price_snapshot_halalas,currency FROM orders
                WHERE id=$1 AND user_id=$2 FOR UPDATE""",
             order_id, user_id,
         )
@@ -134,7 +134,11 @@ async def acknowledge_delivery(
         )
         if not ready:
             raise ValueError("result unavailable")
-        if order["price_snapshot_halalas"]:
+        if order["currency"] == "XTR":
+            from platform_core.stars_payments import mark_star_delivery
+
+            await mark_star_delivery(connection, order_id, receipt)
+        elif order["price_snapshot_halalas"]:
             await settle(connection, user_id, order_id, f"capture:{order_id}", kind="CAPTURE")
         await connection.execute(
             """UPDATE orders SET status='COMPLETED',completed_at=now(),delivery_receipt=$2

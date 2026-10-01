@@ -18,13 +18,18 @@ from aiogram.types import (
 )
 from platform_core.config import get_settings
 from platform_core.custom_requests import draft_user_id
-from platform_core.ledger import balance
 from platform_core.logging import configure_logging
 from platform_core.orders import ensure_telegram_user
 from platform_core.service_catalog import available_services
 from platform_core.telegram_workflow import active_workflow
 
-from apps.telegram_bot import custom_request_ui, customer_files, customer_status, pdf_workflow
+from apps.telegram_bot import (
+    custom_request_ui,
+    customer_files,
+    customer_status,
+    pdf_workflow,
+    stars_payments,
+)
 
 logger = logging.getLogger(__name__)
 dispatcher = Dispatcher()
@@ -33,7 +38,7 @@ keyboard = ReplyKeyboardMarkup(
         [KeyboardButton(text="✨ الخدمات"), KeyboardButton(text="🧰 الأدوات")],
         [KeyboardButton(text="➕ اطلب خدمة"), KeyboardButton(text="📋 طلباتي")],
         [KeyboardButton(text="📁 ملفاتي")],
-        [KeyboardButton(text="💰 رصيدي"), KeyboardButton(text="🛒 المتجر الرقمي")],
+        [KeyboardButton(text="⭐ الدفع والدعم"), KeyboardButton(text="🛒 المتجر الرقمي")],
     ],
     resize_keyboard=True,
 )
@@ -44,6 +49,37 @@ merge_keyboard = ReplyKeyboardMarkup(
     ],
     resize_keyboard=True,
 )
+
+
+
+@dispatcher.callback_query(F.data.startswith("stars:confirm:"))
+async def stars_invoice(callback: CallbackQuery, bot: Bot) -> None:
+    await stars_payments.invoice(callback, bot)
+
+
+@dispatcher.pre_checkout_query()
+async def stars_precheckout(query) -> None:
+    await stars_payments.precheckout(query)
+
+
+@dispatcher.message(F.successful_payment | F.refunded_payment)
+async def stars_receipt(message: Message) -> None:
+    if message.chat.type == "private":
+        await stars_payments.payment_notice(message)
+
+
+@dispatcher.message(Command("terms"))
+async def payment_terms(message: Message) -> None:
+    if message.chat.type == "private":
+        await message.answer(get_settings().telegram_payment_terms.strip()
+                             or "شروط الشراء قيد التجهيز. الدفع غير متاح حاليًا.")
+
+
+@dispatcher.message(Command("paysupport"))
+async def payment_support(message: Message) -> None:
+    if message.chat.type == "private":
+        await message.answer(get_settings().telegram_payment_support.strip()
+                             or "دعم الدفع قيد التجهيز. الدفع غير متاح حاليًا.")
 
 
 @dispatcher.message(CommandStart())
@@ -134,14 +170,14 @@ async def show_catalog(message: Message) -> None:
         return
     connection = await asyncpg.connect(settings.database_url.replace("+asyncpg", ""))
     try:
-        services = await available_services(connection)
+        services = await available_services(connection, currency="XTR")
     finally:
         await connection.close()
     if not services:
         await message.answer("لا توجد خدمات متاحة حاليًا.")
         return
     buttons = [[InlineKeyboardButton(
-        text=f"{service.name_ar[:32]} · {service.price_halalas / 100:.2f} ر.س",
+        text=f"{service.name_ar[:32]} · {service.price_stars} ⭐",
         callback_data=f"catalog:select:{service.id}",
     )] for service in services]
     await message.answer("اختر الخدمة؛ ولطلب المراجعة استخدم «➕ اطلب خدمة»:",
@@ -164,7 +200,7 @@ async def select_service(callback: CallbackQuery) -> None:
         return
     connection = await asyncpg.connect(settings.database_url.replace("+asyncpg", ""))
     try:
-        matching = await available_services(connection, service_id=service_id)
+        matching = await available_services(connection, service_id=service_id, currency="XTR")
     finally:
         await connection.close()
     if not matching:
@@ -198,17 +234,11 @@ async def text_message(message: Message) -> None:
         await customer_files.show_files(message)
     elif content == "✅ مراجعة السعر":
         await pdf_workflow.review(message)
-    elif content == "💰 رصيدي":
-        connection = await asyncpg.connect(get_settings().database_url.replace("+asyncpg", ""))
-        try:
-            user_id = await ensure_telegram_user(connection, message.from_user.id)
-            current = await balance(connection, user_id)
-            await message.answer(
-                f"رصيدك المتاح: {current.available_halalas / 100:.2f} ر.س\n"
-                f"المبلغ المحجوز: {current.reserved_halalas / 100:.2f} ر.س"
-            )
-        finally:
-            await connection.close()
+    elif content in {"💰 رصيدي", "⭐ الدفع والدعم"}:
+        await message.answer(
+            "الدفع بنجوم تلغرام مباشرة لكل طلب؛ لا تحتاج شحن رصيد داخل البوت. "
+            "راجع /terms للشروط و/paysupport للمساعدة في الدفع."
+        )
     elif content == "🛒 المتجر الرقمي":
         await message.answer("المتجر الرقمي غير مرتبط بهذا البوت حاليًا.")
     elif await custom_request_ui.submit_if_collecting(message):
@@ -247,7 +277,7 @@ async def main() -> None:
     task = asyncio.create_task(heartbeat())
     try:
         logger.info("telegram_polling_started")
-        await dispatcher.start_polling(bot)
+        await stars_payments.poll_updates(bot, dispatcher)
     finally:
         task.cancel()
         with suppress(asyncio.CancelledError):

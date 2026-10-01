@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     backup_status_path: str = ""
     telegram_bot_token: str = ""
     telegram_orders_enabled: bool = False
+    telegram_stars_enabled: bool = False
+    telegram_payment_terms: str = Field(default="", max_length=2000)
+    telegram_payment_support: str = Field(default="", max_length=500)
     service_activation_enabled: bool = False
     admin_cookie_secure: bool = True
     admin_login_source_limit: int = Field(default=30, ge=1, le=1000)

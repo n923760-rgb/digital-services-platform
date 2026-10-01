@@ -111,6 +111,7 @@ class ServiceUpdateForm(BaseModel):
     reason: str
     description_ar: str | None = None
     base_price_halalas: StrictInt | None = None
+    base_price_stars: StrictInt | None = None
     enabled: StrictBool | None = None
     confirm: StrictBool = False
 
@@ -132,6 +133,7 @@ class ServiceCreateForm(BaseModel):
     description_ar: str = ""
     processor_type: Literal["ai", "tool", "template", "manual", "hybrid"]
     base_price_halalas: StrictInt
+    base_price_stars: StrictInt | None = None
     input_schema: dict[str, Any] = Field(default_factory=dict)
     reason: str
 
@@ -204,6 +206,8 @@ async def overview(_admin: AdminIdentity = VIEW_DEPENDENCY):
             AS reviewing_custom_requests,
           (SELECT count(*) FROM payments WHERE status='PAID' AND paid_at >= CURRENT_DATE)
             AS wallet_topups_today,
+          (SELECT count(*) FROM star_charges WHERE status='REFUND_PENDING') AS pending_star_refunds,
+          (SELECT count(*) FROM telegram_payment_inbox WHERE status<>'DONE') AS pending_star_receipts,
           (SELECT count(*) FROM payments WHERE status='FAILED') AS failed_payments""")
     return {**dict(row), "backup": backup_health(get_settings().backup_status_path)}
 
@@ -212,7 +216,7 @@ async def overview(_admin: AdminIdentity = VIEW_DEPENDENCY):
 async def orders(_admin: AdminIdentity = VIEW_DEPENDENCY):
     async with database() as db:
         rows = await db.fetch("""SELECT o.id,o.status,o.channel,o.price_snapshot_halalas,
-          o.currency,o.created_at,s.name_ar AS service_name,
+          o.currency,o.price_snapshot_stars,o.created_at,s.name_ar AS service_name,
           (SELECT count(*) FROM jobs j WHERE j.order_id=o.id AND j.status='FAILED') AS failed_jobs
           FROM orders o JOIN services s ON s.id=o.service_id
           ORDER BY o.created_at DESC,o.id DESC LIMIT 100""")
@@ -270,7 +274,7 @@ async def triage_custom_request(
 async def services(_admin: AdminIdentity = VIEW_DEPENDENCY):
     async with database() as db:
         rows = await db.fetch("""SELECT s.id,s.slug,s.name_ar,s.description_ar,
-          s.base_price_halalas,s.processor_type,s.enabled,s.revision,
+          s.base_price_halalas,s.base_price_stars,s.processor_type,s.enabled,s.revision,
           c.name_ar AS category_name_ar FROM services s
           JOIN service_categories c ON c.id=s.category_id
           ORDER BY c.name_ar,s.name_ar,s.id LIMIT 200""")
@@ -311,7 +315,7 @@ async def register_service(request: Request, form: ServiceCreateForm,
                 db, admin.id, category_id=form.category_id, slug=form.slug,
                 name_ar=form.name_ar, description_ar=form.description_ar,
                 processor_type=form.processor_type, base_price_halalas=form.base_price_halalas,
-                input_schema=form.input_schema, reason=form.reason,
+                input_schema=form.input_schema, reason=form.reason, base_price_stars=form.base_price_stars,
             )
         except ServiceNotFound as exc:
             raise HTTPException(404, str(exc)) from exc
@@ -335,6 +339,7 @@ async def edit_service(request: Request, service_id: UUID, form: ServiceUpdateFo
                 reason=form.reason,
                 description_ar=form.description_ar,
                 base_price_halalas=form.base_price_halalas,
+                base_price_stars=form.base_price_stars,
                 enabled=form.enabled,
                 confirm=form.confirm,
                 allow_activation=get_settings().service_activation_enabled,

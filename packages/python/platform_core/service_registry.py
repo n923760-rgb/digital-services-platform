@@ -65,7 +65,7 @@ async def create_category(
 async def create_service(
     connection: asyncpg.Connection, actor_id: UUID, *, category_id: UUID, slug: str,
     name_ar: str, description_ar: str, processor_type: str, base_price_halalas: int,
-    input_schema: dict, reason: str,
+    input_schema: dict, reason: str, base_price_stars: int | None = None,
 ) -> UUID:
     slug, name_ar, reason = validate_new_entry(slug, name_ar, reason)
     description_ar = description_ar.strip()
@@ -75,6 +75,9 @@ async def create_service(
         raise ServiceUpdateRejected("unknown processor type")
     if type(base_price_halalas) is not int or not 0 <= base_price_halalas <= 1_000_000:
         raise ServiceUpdateRejected("price must be between 0 and 10000 SAR")
+    if base_price_stars is not None and (type(base_price_stars) is not int
+                                          or not 1 <= base_price_stars <= 100_000):
+        raise ServiceUpdateRejected("Stars price must be between 1 and 100000")
     if not isinstance(input_schema, dict):
         raise ServiceUpdateRejected("input schema must be an object")
     try:
@@ -91,14 +94,14 @@ async def create_service(
             raise ServiceNotFound("category not found")
         service_id = uuid4()
         created = await connection.fetchval("""INSERT INTO services
-          (id,category_id,slug,name_ar,description_ar,processor_type,base_price_halalas,input_schema)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)
+          (id,category_id,slug,name_ar,description_ar,processor_type,base_price_halalas,input_schema,base_price_stars)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)
           ON CONFLICT (slug) DO NOTHING RETURNING id""",
           service_id, category_id, slug, name_ar, description_ar,
-          processor_type, base_price_halalas, schema_json)
+          processor_type, base_price_halalas, schema_json, base_price_stars)
         if created is None:
             existing = await connection.fetchrow("""SELECT id,category_id,name_ar,description_ar,
-              processor_type,base_price_halalas,input_schema FROM services WHERE slug=$1""", slug)
+              processor_type,base_price_halalas,base_price_stars,input_schema FROM services WHERE slug=$1""", slug)
             stored_schema = existing["input_schema"]
             if isinstance(stored_schema, str):
                 stored_schema = json.loads(stored_schema)
@@ -106,6 +109,7 @@ async def create_service(
                     and existing["description_ar"] == description_ar
                     and existing["processor_type"] == processor_type
                     and existing["base_price_halalas"] == base_price_halalas
+                    and existing["base_price_stars"] == base_price_stars
                     and stored_schema == input_schema):
                 raise ServiceRevisionConflict("service slug already used")
             return existing["id"]
@@ -114,7 +118,8 @@ async def create_service(
           VALUES ($1,$2,'SERVICE_CREATED',$3,$4::jsonb)""",
           uuid4(), actor_id, reason,
           json.dumps({"service_id": str(service_id), "category_id": str(category_id),
-                      "slug": slug, "processor_type": processor_type, "enabled": False},
+                      "slug": slug, "processor_type": processor_type, "enabled": False,
+                      "base_price_stars": base_price_stars},
                      ensure_ascii=False))
         return service_id
 
@@ -124,25 +129,29 @@ async def update_service(
     expected_revision: int, reason: str, description_ar: str | None = None,
     base_price_halalas: int | None = None, enabled: bool | None = None,
     confirm: bool = False, allow_activation: bool = False,
+    base_price_stars: int | None = None,
 ) -> dict:
     """Lock service, validate the intended transition, then change and audit atomically."""
     reason = reason.strip()
     if not 10 <= len(reason) <= 500:
         raise ServiceUpdateRejected("reason must be 10–500 characters")
     if expected_revision < 1 or (description_ar is None and base_price_halalas is None
-                                 and enabled is None):
+                                 and enabled is None and base_price_stars is None):
         raise ServiceUpdateRejected("no valid update requested")
     if description_ar is not None and len(description_ar) > 1000:
         raise ServiceUpdateRejected("description too long")
     if base_price_halalas is not None and (type(base_price_halalas) is not int
                                            or not 0 <= base_price_halalas <= 1_000_000):
         raise ServiceUpdateRejected("price must be between 0 and 10000 SAR")
+    if base_price_stars is not None and (type(base_price_stars) is not int
+                                          or not 1 <= base_price_stars <= 100_000):
+        raise ServiceUpdateRejected("Stars price must be between 1 and 100000")
     if enabled is not None and type(enabled) is not bool:
         raise ServiceUpdateRejected("invalid enabled value")
 
     async with connection.transaction():
         row = await connection.fetchrow("""SELECT s.id,s.slug,s.processor_type,s.input_schema,
-          s.description_ar,s.base_price_halalas,s.enabled,s.revision,
+          s.description_ar,s.base_price_halalas,s.base_price_stars,s.enabled,s.revision,
           c.enabled AS category_enabled FROM services s
           JOIN service_categories c ON c.id=s.category_id
           WHERE s.id=$1 FOR UPDATE OF s""", service_id)
@@ -153,10 +162,11 @@ async def update_service(
 
         description = row["description_ar"] if description_ar is None else description_ar.strip()
         price = row["base_price_halalas"] if base_price_halalas is None else base_price_halalas
+        stars = row["base_price_stars"] if base_price_stars is None else base_price_stars
         active = row["enabled"] if enabled is None else enabled
-        if active == row["enabled"] and description == row["description_ar"] and price == row["base_price_halalas"]:
+        if active == row["enabled"] and description == row["description_ar"] and price == row["base_price_halalas"] and stars == row["base_price_stars"]:
             return {"revision": row["revision"], "enabled": active,
-                    "description_ar": description, "base_price_halalas": price}
+                    "description_ar": description, "base_price_halalas": price, "base_price_stars": stars}
 
         if enabled is not None and enabled != row["enabled"] and not confirm:
             raise ServiceUpdateRejected("confirm availability change explicitly")
@@ -173,18 +183,19 @@ async def update_service(
 
         revision = row["revision"] + 1
         await connection.execute("""UPDATE services SET description_ar=$2,base_price_halalas=$3,
-          enabled=$4,revision=$5,updated_at=now() WHERE id=$1""",
-          service_id, description, price, active, revision)
+          enabled=$4,revision=$5,base_price_stars=$6,updated_at=now() WHERE id=$1""",
+          service_id, description, price, active, revision, stars)
         changes = {
             "service_id": str(service_id), "revision_before": row["revision"],
             "revision_after": revision,
             "before": {"description_ar": row["description_ar"],
-                       "base_price_halalas": row["base_price_halalas"], "enabled": row["enabled"]},
+                       "base_price_halalas": row["base_price_halalas"],
+                       "base_price_stars": row["base_price_stars"], "enabled": row["enabled"]},
             "after": {"description_ar": description,
-                      "base_price_halalas": price, "enabled": active},
+                      "base_price_halalas": price, "base_price_stars": stars, "enabled": active},
         }
         await connection.execute("""INSERT INTO audit_logs
           (id,actor_admin_id,action,reason,metadata) VALUES ($1,$2,'SERVICE_UPDATED',$3,$4::jsonb)""",
           uuid4(), actor_id, reason, json.dumps(changes, ensure_ascii=False))
         return {"revision": revision, "enabled": active,
-                "description_ar": description, "base_price_halalas": price}
+                "description_ar": description, "base_price_halalas": price, "base_price_stars": stars}

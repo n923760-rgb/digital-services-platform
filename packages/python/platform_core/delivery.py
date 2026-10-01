@@ -94,7 +94,13 @@ async def fail_delivery(
             price = await connection.fetchval(
                 "SELECT price_snapshot_halalas FROM orders WHERE id=$1", claim.order_id,
             )
-            await connection.execute("UPDATE orders SET status='FAILED' WHERE id=$1", claim.order_id)
+            await connection.execute(
+                "UPDATE orders SET status='FAILED' WHERE id=$1 AND status<>'REFUNDED'",
+                claim.order_id,
+            )
+            from platform_core.stars_payments import request_star_refund
+
+            await request_star_refund(connection, claim.order_id)
             if price:
                 await settle(
                     connection, claim.user_id, claim.order_id,

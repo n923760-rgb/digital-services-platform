@@ -34,7 +34,7 @@ async def test_selection_uses_callback_sender_and_rechecks_service(monkeypatch):
     monkeypatch.setattr(CallbackQuery, "answer", answer)
 
     await telegram_main.select_service(callback)
-    listing.assert_awaited_once_with(connection, service_id=service_id)
+    listing.assert_awaited_once_with(connection, service_id=service_id, currency="XTR")
     begin.assert_awaited_once_with(message, 42)
     answer.assert_awaited_once()
 

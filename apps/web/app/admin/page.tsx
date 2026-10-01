@@ -3,22 +3,18 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 type Admin = { username: string; role: string; service_activation_enabled: boolean };
-type Overview = { orders_today: number; processing_orders: number; completed_orders: number; failed_orders: number; failed_jobs: number; failed_deliveries: number; new_custom_requests: number; reviewing_custom_requests: number; wallet_topups_today: number; failed_payments: number; backup: { status: "ok" | "missing" | "stale" | "unconfigured"; last_success_at: string | null } };
-type Order = { id: string; status: string; channel: string; service_name: string; price_snapshot_halalas: number; currency: string; created_at: string; failed_jobs: number };
+type Overview = { orders_today: number; processing_orders: number; completed_orders: number; failed_orders: number; failed_jobs: number; failed_deliveries: number; new_custom_requests: number; reviewing_custom_requests: number; wallet_topups_today: number; failed_payments: number; pending_star_refunds?: number; pending_star_receipts?: number; backup: { status: "ok" | "missing" | "stale" | "unconfigured"; last_success_at: string | null } };
+type Order = { id: string; status: string; channel: string; service_name: string; price_snapshot_halalas: number; price_snapshot_stars?: number | null; currency: string; created_at: string; failed_jobs: number };
 type CustomRequest = { id: string; description: string; status: "NEW" | "IN_REVIEW"; revision: number; reviewer_username: string | null; telegram_user_id: number; created_at: string; updated_at: string };
 type FailedWork = { id: string; order_id: string; service_name: string; error_code: string | null; attempt_count: number; max_attempts: number; failed_at: string | null };
 type FailedPayment = { id: string; provider: string; amount_halalas: number; created_at: string };
 type Attention = { jobs: FailedWork[]; deliveries: FailedWork[]; payments: FailedPayment[] };
-type Service = { id: string; slug: string; name_ar: string; description_ar: string; category_name_ar: string; processor_type: string; base_price_halalas: number; enabled: boolean; revision: number };
+type Service = { id: string; slug: string; name_ar: string; description_ar: string; category_name_ar: string; processor_type: string; base_price_halalas: number; base_price_stars?: number | null; enabled: boolean; revision: number };
 type Category = { id: string; slug: string; name_ar: string; enabled: boolean };
 
 const currency = (halalas: number) => new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(halalas / 100);
-const halalasFromInput = (amount: string): number | null => {
-  if (!/^(?:0|[1-9]\d{0,4})(?:\.\d{1,2})?$/.test(amount)) return null;
-  const [riyals, fraction = ""] = amount.split(".");
-  const value = Number(riyals) * 100 + Number(fraction.padEnd(2, "0"));
-  return value <= 1_000_000 ? value : null;
-};
+const starsFromInput = (amount: string): number | null =>
+  /^[1-9]\d{0,5}$/.test(amount) && Number(amount) <= 100_000 ? Number(amount) : null;
 
 export default function AdminPage() {
   const [admin, setAdmin] = useState<Admin | null>(null);
@@ -139,8 +135,10 @@ export default function AdminPage() {
     if (authBusy.current) return;
     const epoch = sessionEpoch.current;
     const fields = new FormData(event.currentTarget);
-    const price = halalasFromInput(String(fields.get("price") ?? ""));
-    if (price === null) { setError("السعر يجب أن يكون بين 0 و10,000 ريال، بدقة هللتين"); return; }
+    const starsText = String(fields.get("stars") ?? "").trim();
+    const stars = starsText ? starsFromInput(starsText) : null;
+    if (starsText && stars === null) { setError("السعر بالنجوم يجب أن يكون عددًا صحيحًا من 1 إلى 100,000"); return; }
+    const price = service.base_price_halalas;
     const enabled = fields.get("enabled") === null ? service.enabled : fields.get("enabled") === "true";
     if (enabled !== service.enabled && !window.confirm(`تأكيد ${enabled ? "تفعيل" : "إيقاف"} خدمة ${service.name_ar}؟`)) return;
     try {
@@ -148,7 +146,8 @@ export default function AdminPage() {
         method: "PATCH", credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ expected_revision: service.revision, reason: fields.get("reason"),
-          description_ar: fields.get("description"), base_price_halalas: price, enabled,
+          description_ar: fields.get("description"), base_price_halalas: price,
+          ...(stars === null ? {} : { base_price_stars: stars }), enabled,
           confirm: enabled !== service.enabled }),
       });
       if (epoch !== sessionEpoch.current) return;
@@ -188,8 +187,10 @@ export default function AdminPage() {
     const epoch = sessionEpoch.current;
     const form = event.currentTarget;
     const fields = new FormData(form);
-    const price = halalasFromInput(String(fields.get("price") ?? ""));
-    if (price === null) { setError("السعر يجب أن يكون بين 0 و10,000 ريال، بدقة هللتين"); return; }
+    const starsText = String(fields.get("stars") ?? "").trim();
+    const stars = starsText ? starsFromInput(starsText) : null;
+    if (starsText && stars === null) { setError("السعر بالنجوم يجب أن يكون عددًا صحيحًا من 1 إلى 100,000"); return; }
+    const price = 0;
     let schema: unknown;
     try { schema = JSON.parse(String(fields.get("input_schema") ?? "{}")); }
     catch { setError("صيغة حقول الخدمة غير صحيحة"); return; }
@@ -201,7 +202,7 @@ export default function AdminPage() {
         method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ category_id: fields.get("category_id"), slug: fields.get("slug"),
           name_ar: fields.get("name_ar"), description_ar: fields.get("description_ar"),
-          processor_type: fields.get("processor_type"), base_price_halalas: price,
+          processor_type: fields.get("processor_type"), base_price_halalas: price, base_price_stars: stars,
           input_schema: schema, reason: fields.get("reason") }),
       });
       if (epoch !== sessionEpoch.current) return;
@@ -253,6 +254,8 @@ export default function AdminPage() {
     ["طلبات خدمات جديدة", overview.new_custom_requests],
     ["قيد مراجعة الخدمات", overview.reviewing_custom_requests],
     ["شحن المحفظة اليوم", overview.wallet_topups_today],
+    ["استردادات نجوم معلقة", overview.pending_star_refunds ?? 0],
+    ["تأكيدات دفع تحتاج متابعة", overview.pending_star_receipts ?? 0],
   ] : [];
   const backup = overview?.backup;
   const backupLabel = backup?.status === "ok" ? "سليمة" : backup?.status === "stale" ? "متأخرة" : backup?.status === "missing" ? "لم تُنشأ بعد" : "غير مهيأة";
@@ -333,7 +336,7 @@ export default function AdminPage() {
               <option value="tool">أداة</option><option value="ai">ذكاء اصطناعي</option><option value="template">قالب</option>
               <option value="manual">يدوي</option><option value="hybrid">مختلط</option>
             </select></label>
-            <label>السعر بالريال<br /><input name="price" required inputMode="decimal" defaultValue="0.00" /></label>
+            <label>السعر بالنجوم<br /><input name="stars" inputMode="numeric" placeholder="غير محدد" /></label>
             <label>حقول الخدمة (JSON)<br /><textarea name="input_schema" dir="ltr" defaultValue="{}" rows={3} maxLength={4000} style={{ width: "100%" }} /></label>
             <small>لأداة دمج PDF: {`{"min_files":2,"max_files":10,"file_mime":"application/pdf"}`}</small>
             <label>سبب الإضافة<br /><input name="reason" required minLength={10} maxLength={500} /></label>
@@ -342,11 +345,11 @@ export default function AdminPage() {
         </details>
       </>}
       {services.map(service => <details key={service.id} style={{ borderTop: "1px solid #e6ebed", paddingBlock: 12 }}>
-        <summary style={{ cursor: "pointer" }}><strong>{service.name_ar}</strong> · {service.category_name_ar} · {currency(service.base_price_halalas)} · {service.enabled ? "مفعّلة" : "معطّلة"}</summary>
+        <summary style={{ cursor: "pointer" }}><strong>{service.name_ar}</strong> · {service.category_name_ar} · {service.base_price_stars ? `${service.base_price_stars} ⭐` : "سعر النجوم غير محدد"} · {service.enabled ? "مفعّلة" : "معطّلة"}</summary>
         <p dir="ltr" style={{ textAlign: "right" }}>{service.slug} · {service.processor_type} · revision {service.revision}</p>
         {admin.role === "OWNER" ? <form key={service.revision} onSubmit={event => void saveService(event, service)} style={{ display: "grid", gap: 10, maxWidth: 500 }}>
           <label>الوصف<br /><textarea name="description" defaultValue={service.description_ar} maxLength={1000} rows={3} style={{ width: "100%" }} /></label>
-          <label>السعر بالريال<br /><input name="price" type="text" inputMode="decimal" required defaultValue={(service.base_price_halalas / 100).toFixed(2)} /></label>
+          <label>السعر بالنجوم<br /><input name="stars" inputMode="numeric" defaultValue={service.base_price_stars ?? ""} placeholder="غير محدد" /></label>
           <label>الإتاحة<br /><select name="enabled" defaultValue={String(service.enabled)} disabled={!service.enabled && !admin.service_activation_enabled}>
             <option value="false">معطّلة</option><option value="true">مفعّلة</option>
           </select></label>
@@ -360,7 +363,7 @@ export default function AdminPage() {
       <thead><tr><th scope="col">الطلب</th><th scope="col">الخدمة</th><th scope="col">الحالة</th><th scope="col">القيمة</th><th scope="col">التاريخ</th></tr></thead>
       <tbody>{orders.map(order => <tr key={order.id} style={{ borderTop: "1px solid #e6ebed" }}>
         <td style={{ padding: 12 }} dir="ltr">{order.id.slice(0, 8)}</td><td>{order.service_name}</td><td>{order.status}{order.failed_jobs > 0 ? " · مهمة فاشلة" : ""}</td>
-        <td>{currency(order.price_snapshot_halalas)}</td><td>{new Date(order.created_at).toLocaleString("ar-SA")}</td>
+        <td>{order.currency === "XTR" ? `${order.price_snapshot_stars} ⭐` : currency(order.price_snapshot_halalas)}</td><td>{new Date(order.created_at).toLocaleString("ar-SA")}</td>
       </tr>)}</tbody></table>{!orders.length && <p>لا توجد طلبات بعد.</p>}</div></section>
   </main>;
 }
