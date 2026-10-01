@@ -13,8 +13,13 @@ REVIEW_LABELS = {"NEW": "بانتظار المراجعة", "IN_REVIEW": "قيد 
 ORDER_LABELS = {
     "DRAFT": "مسودة", "RESERVED": "بانتظار المعالجة", "QUEUED": "بانتظار المعالجة",
     "PROCESSING": "قيد المعالجة", "AWAITING_FULFILLMENT": "النتيجة جاهزة وبانتظار الإرسال",
+    "REFUNDED": "تم رد النجوم عبر تلغرام",
     "COMPLETED": "تم تسليم النتيجة", "FAILED": "تعذر إكمال الطلب", "CANCELLED": "ملغى",
 }
+
+
+PAYMENT_LABELS = {"REFUND_PENDING": "رد النجوم قيد المتابعة",
+                  "REFUNDED": "تم رد النجوم عبر تلغرام", "PAID": "وصل الدفع"}
 
 
 async def show_requests(message: Message) -> None:
@@ -37,9 +42,10 @@ async def show_requests(message: Message) -> None:
     lines = ["آخر عشرة طلبات مرسلة:"]
     for record in records:
         review = record["kind"] == "review"
-        labels = REVIEW_LABELS if review else ORDER_LABELS
+        payment = record["kind"] == "payment"
+        labels = PAYMENT_LABELS if payment else REVIEW_LABELS if review else ORDER_LABELS
         label = labels.get(record["status"], "الحالة غير متاحة")
-        title = "طلب مراجعة" if review else "طلب خدمة"
+        title = "دفعة نجوم" if payment else "طلب مراجعة" if review else "طلب خدمة"
         lines.append(f"{title} {record['id']}\n{label}")
     lines.append("طلبات المراجعة لا تعني بدء التنفيذ أو تحديد سعر. حدّث الحالة باختيار «📋 طلباتي».")
     await message.answer("\n\n".join(lines))

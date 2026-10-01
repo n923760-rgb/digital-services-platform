@@ -231,7 +231,10 @@ async def test_terminal_failure_requests_real_stars_refund_not_sar_release(db, o
         assert await fail_delivery(db, delivery, "SYNTHETIC_DELIVERY_ERROR", retryable=False)
     assert await db.fetchval("SELECT status FROM star_charges WHERE order_id=$1", order) == "REFUND_PENDING"
     bot = SimpleNamespace(refund_star_payment=AsyncMock(return_value=True))
-    assert await ui.process_refunds(bot, db) >= 1
+    for _ in range(5):
+        await ui.process_refunds(bot, db)
+        if await db.fetchval("SELECT status FROM star_charges WHERE order_id=$1", order) == "REFUNDED":
+            break
     assert await db.fetchval("SELECT status FROM star_charges WHERE order_id=$1", order) == "REFUNDED"
     assert await db.fetchval("SELECT status FROM orders WHERE id=$1", order) == "REFUNDED"
     assert await balance(db, offer.user) == Balance(0, 0)
@@ -304,3 +307,84 @@ async def test_polling_persists_before_next_offset_even_when_handler_fails(monke
     with pytest.raises(asyncio.CancelledError):
         await ui.poll_updates(bot, dispatcher)
     dispatcher.feed_update.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("matched", [False, True])
+async def test_ambiguous_refund_requires_matching_outgoing_history(db, offer, matched):
+    from aiogram.types import StarTransaction, StarTransactions, TransactionPartnerUser
+
+    await approve(db, offer)
+    await pay(db, offer, allow=False)
+    transaction = StarTransaction(
+        id=str(offer.invoice.id), amount=37, date=datetime.now(UTC),
+        receiver=TransactionPartnerUser(
+            transaction_type="invoice_payment",
+            user=User(id=offer.telegram_id if matched else offer.telegram_id + 1,
+                      is_bot=False, first_name="Synthetic buyer"),
+            invoice_payload=offer.invoice.payload,
+        ),
+    )
+    bot = SimpleNamespace(
+        refund_star_payment=AsyncMock(side_effect=OSError("synthetic timeout")),
+        get_star_transactions=AsyncMock(return_value=StarTransactions(transactions=[transaction])),
+    )
+    await ui.process_refunds(bot, db)
+    status = await db.fetchval("SELECT status FROM star_charges WHERE charge_id=$1",
+                              str(offer.invoice.id))
+    assert status == ("REFUNDED" if matched else "REFUND_PENDING")
+
+
+@pytest.mark.asyncio
+async def test_precheckout_failure_sends_negative_answer_and_gates_require_terms_support(monkeypatch):
+    from aiogram.types import PreCheckoutQuery
+
+    settings = SimpleNamespace(telegram_orders_enabled=True, telegram_stars_enabled=True,
+                               telegram_payment_terms=TERMS, telegram_payment_support="Synthetic support",
+                               database_url="postgresql://test")
+    assert ui.checkout_enabled(settings)
+    settings.telegram_payment_support = ""
+    assert not ui.checkout_enabled(settings)
+    settings.telegram_payment_support = "Synthetic support"
+    db = SimpleNamespace(close=AsyncMock())
+    query = PreCheckoutQuery(
+        id="synthetic", from_user=User(id=42, is_bot=False, first_name="Synthetic"),
+        currency="XTR", total_amount=37, invoice_payload="stars:" + uuid4().hex,
+    )
+    answer = AsyncMock()
+    monkeypatch.setattr(ui, "get_settings", lambda: settings)
+    monkeypatch.setattr(ui.asyncpg, "connect", AsyncMock(return_value=db))
+    monkeypatch.setattr(ui, "approve_star_checkout", AsyncMock(side_effect=TimeoutError()))
+    monkeypatch.setattr(PreCheckoutQuery, "answer", answer)
+    await ui.precheckout(query)
+    assert answer.await_args.kwargs["ok"] is False
+    assert answer.await_args.kwargs["error_message"]
+
+
+@pytest.mark.asyncio
+async def test_owned_private_invoice_has_one_xtr_price_and_empty_provider_token(db, offer, monkeypatch):
+    from aiogram.types import CallbackQuery
+
+    settings = SimpleNamespace(telegram_orders_enabled=True, telegram_stars_enabled=True,
+                               telegram_payment_terms=TERMS, telegram_payment_support="Synthetic support",
+                               database_url=os.environ["DATABASE_URL"])
+    message = Message(message_id=7, date=datetime.now(UTC),
+                      chat=Chat(id=offer.telegram_id, type="private"),
+                      from_user=User(id=999, is_bot=True, first_name="Bot"), text="Stars quote")
+    callback = CallbackQuery(
+        id="synthetic-invoice", chat_instance="private",
+        from_user=User(id=offer.telegram_id, is_bot=False, first_name="Buyer"),
+        message=message,
+        data=f"stars:confirm:{offer.workflow.id.hex}:{offer.quote.quote_revision}",
+    )
+    bot = SimpleNamespace(send_invoice=AsyncMock())
+    monkeypatch.setattr(ui, "get_settings", lambda: settings)
+    monkeypatch.setattr(CallbackQuery, "answer", AsyncMock())
+    await ui.invoice(callback, bot)
+    invoice = bot.send_invoice.await_args.kwargs
+    assert invoice["currency"] == "XTR" and invoice["provider_token"] == ""
+    assert invoice["chat_id"] == offer.telegram_id
+    assert len(invoice["prices"]) == 1 and invoice["prices"][0].amount == 37
+    assert invoice["payload"] == offer.invoice.payload
+    assert len(invoice["payload"].encode()) <= 128
+    assert invoice["start_parameter"]

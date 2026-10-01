@@ -30,14 +30,14 @@ The owner confirmed on 2026-10-01 that the customer product is a Telegram bot. P
 ## Product boundaries and invariants
 
 - Telegram/HTTP/web are adapters. Application state, prices, wallet, orders and job transitions belong in platform_core and PostgreSQL.
-- Integer halalas only for persisted money. Wallet entries are the source of financial truth; lock the wallet row for writes. Preserve idempotency, append-only history and one reserve/settlement per order.
-- Capture only after actual delivery receipt. Terminal processing/delivery failure releases held funds. Do not equate ledger RELEASE with a provider refund.
+- SAR amounts remain integer halalas; owner selected direct Telegram Stars payments per order. XTR amounts are whole Stars in separate invoices/charge history and order snapshots; never reinterpret or convert SAR ledger history. Wallet entries are the source of financial truth; lock the wallet row for writes. Preserve idempotency, append-only history and one reserve/settlement per order.
+- Application delivery recognition occurs only after actual delivery receipt. Telegram collects XTR before processing; preserve its paid charge separately and refund through Telegram on permanent fulfillment failure. SAR capture remains after delivery. Terminal processing/delivery failure releases held funds. Do not equate ledger RELEASE with a provider refund.
 - Bind customer confirmation to the exact offered price and inputs. Follow the live roadmap for DSP-001 qualification; versioned callbacks are a server-enforced consent boundary.
 - Enforce owner/file/expiry and admin permissions server side. React visibility is not authorization.
 - Production worker PDF parsing must remain in the no-network sandbox with limits and no application secrets. Signature checks/active-content rejection are not malware clearance.
 - TELEGRAM_ORDERS_ENABLED and SERVICE_ACTIVATION_ENABLED default off. Do not enable paid operations without an authorized, qualified launch task.
 - S3Mock and demonstration credentials are development/CI only.
-- No live payment adapter exists at adoption. Payment fixtures cannot fund customers.
+- At adoption no payment adapter existed. Current selected integration is direct Telegram Stars (docs/TELEGRAM-STARS.md), gated off pending live qualification. Payment fixtures cannot fund customers or prove real Stars charges/refunds.
 - The Digital Store remains independent. Do not integrate its wallet/database by assumption.
 Read README.md and docs/CORE-001.md, PAYMENTS.md, FILES.md, SERVICE-REGISTRY.md, CUSTOM-REQUESTS.md and BACKUP-RECOVERY.md for the affected subsystem.
 

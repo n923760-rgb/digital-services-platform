@@ -16,6 +16,10 @@ async def recent_telegram_requests(
              UNION ALL
              SELECT o.id,'order' AS kind,o.status,o.created_at FROM orders o
              JOIN users u ON u.id=o.user_id WHERE u.telegram_user_id=$1 AND o.channel='telegram'
+             UNION ALL
+             SELECT i.id,'payment' AS kind,c.status,c.created_at FROM star_charges c
+             JOIN star_invoices i ON i.id=c.invoice_id JOIN users u ON u.id=i.user_id
+             WHERE u.telegram_user_id=$1 AND c.order_id IS NULL
            ) AS owned ORDER BY created_at DESC,id DESC LIMIT $2""", telegram_user_id, limit,
     )
     return [dict(row) for row in rows]

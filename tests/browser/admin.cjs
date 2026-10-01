@@ -9,12 +9,12 @@ const fixture = {
   me: { username: "test-owner", role: "OWNER", service_activation_enabled: false },
   overview: { orders_today: 1, processing_orders: 0, completed_orders: 1, failed_orders: 0,
     failed_jobs: 0, failed_deliveries: 0, new_custom_requests: 1, reviewing_custom_requests: 0,
-    wallet_topups_today: 0, failed_payments: 0, backup: { status: "ok", last_success_at: timestamp } },
+    wallet_topups_today: 0, failed_payments: 0, pending_star_refunds: 2, pending_star_receipts: 1, backup: { status: "ok", last_success_at: timestamp } },
   orders: [{ id, status: "COMPLETED", channel: "TELEGRAM", service_name: long,
     price_snapshot_halalas: 1250, currency: "SAR", created_at: timestamp, failed_jobs: 0 }],
   attention: { jobs: [], deliveries: [], payments: [] },
   services: [{ id, slug: "pdf-merge", name_ar: long, description_ar: long, category_name_ar: long,
-    processor_type: "tool", base_price_halalas: 1250, enabled: false, revision: 1 }],
+    processor_type: "tool", base_price_halalas: 1250, base_price_stars: 37, enabled: false, revision: 1 }],
   categories: [{ id, slug: "files", name_ar: long, enabled: true }],
   "custom-requests": [{ id, description: long, status: "NEW", revision: 1,
     reviewer_username: null, telegram_user_id: 12345, created_at: timestamp, updated_at: timestamp }],
@@ -30,7 +30,7 @@ async function open(browser, { authenticated = true, role = "OWNER", paged = fal
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await context.newPage();
   const state = { authenticated, role, loginCount: 0, logoutCount: 0, logoutFails: false,
-    loginGate: null, overviewGate: null, pageGate: null, pageFails: false, pageUnauthorized: false, olderCount: 0, cursors: [] };
+    loginGate: null, overviewGate: null, pageGate: null, pageFails: false, pageUnauthorized: false, olderCount: 0, cursors: [], serviceWrites: [] };
   const firstPage = Array.from({ length: 50 }, (_, index) => ({
     ...fixture["custom-requests"][0], id: "00000000-0000-4000-8000-" + String(50 - index).padStart(12, "0"),
     updated_at: "2026-10-01T12:00:00.123456Z",
@@ -64,6 +64,11 @@ async function open(browser, { authenticated = true, role = "OWNER", paged = fal
     }
     if (endpoint === "me") return route.fulfill({ status: state.authenticated ? 200 : 401,
       json: { ...fixture.me, role: state.role } });
+    if (endpoint.startsWith("services/") && route.request().method() === "PATCH") {
+      const body = route.request().postDataJSON();
+      state.serviceWrites.push(body);
+      return route.fulfill({ json: { ...body, revision: body.expected_revision + 1 } });
+    }
     if (route.request().method() === "PATCH") return route.fulfill({ json: { ok: true } });
     if (endpoint === "overview" && state.overviewGate) await state.overviewGate.promise;
     if (!(endpoint in fixture)) throw new Error("Unhandled mocked endpoint: " + endpoint);
@@ -85,7 +90,7 @@ async function noOverflow(page, label) {
 (async () => {
   const browser = await chromium.launch({ headless: true });
   try {
-    const { page, context, errors } = await open(browser);
+    const { page, context, errors, state } = await open(browser);
     await page.locator("details").evaluateAll(items => items.forEach(item => { item.open = true; }));
     assert.equal(await page.locator("html").getAttribute("dir"), "rtl");
     await page.getByLabel("سبب بدء المراجعة", { exact: true }).fill("سبب اختبار موثق فقط");
@@ -113,6 +118,21 @@ async function noOverflow(page, label) {
     assert.notEqual(await region.evaluate(el => getComputedStyle(el).outlineStyle), "none");
     await page.keyboard.press("ArrowLeft");
     assert.equal(await page.locator('th[scope="col"]').count(), 5);
+    const serviceForm = page.locator("form").filter({ has: page.getByRole("button", { name: "حفظ التعديل", exact: true }) });
+    await serviceForm.getByLabel("السعر بالنجوم", { exact: true }).fill("37.5");
+    await serviceForm.getByLabel("سبب التعديل", { exact: true }).fill("اختبار تحديث سعر النجوم فقط");
+    await serviceForm.getByRole("button", { name: "حفظ التعديل", exact: true }).click();
+    await page.getByRole("alert").filter({ hasText: "السعر بالنجوم يجب" }).waitFor();
+    assert.equal(state.serviceWrites.length, 0);
+    await serviceForm.getByLabel("السعر بالنجوم", { exact: true }).fill("41");
+    const savedPrice = page.waitForResponse("**/api/admin/services/" + id);
+    await serviceForm.getByRole("button", { name: "حفظ التعديل", exact: true }).click();
+    await savedPrice;
+    assert.equal(state.serviceWrites.length, 1);
+    assert.equal(state.serviceWrites[0].base_price_stars, 41);
+    assert.equal(state.serviceWrites[0].base_price_halalas, 1250);
+    await page.getByText("41 ⭐", { exact: false }).first().waitFor();
+    console.log("PASS integer Stars editor rejects fractions and preserves legacy SAR amount");
     assert.deepEqual(errors, []);
     await context.close();
 

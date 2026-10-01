@@ -96,7 +96,8 @@ def configure_handler(monkeypatch, telegram_id, storage, *, budget=100 * 1024 * 
     monkeypatch.setattr(pdf_workflow.asyncpg, "connect", connect)
     monkeypatch.setattr(pdf_workflow, "storage_client", lambda: storage)
     monkeypatch.setattr(pdf_workflow, "settings", SimpleNamespace(
-        telegram_orders_enabled=True, database_url=test_url,
+        telegram_orders_enabled=True, telegram_stars_enabled=True,
+        telegram_payment_terms="Synthetic purchase terms", telegram_payment_support="Synthetic support", database_url=test_url,
         max_upload_bytes=20 * 1024 * 1024, max_user_upload_bytes=budget,
         object_storage_bucket="test", file_retention_days=30,
     ))

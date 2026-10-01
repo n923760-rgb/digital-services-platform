@@ -2,7 +2,7 @@
 
 Repository: https://github.com/n923760-rgb/digital-services-platform
 Official branch: main; always retrieve live HEAD rather than treating a stored SHA as current.
-Owner-confirmed customer product: Telegram bot. Web is the existing operations/admin console, not a requested customer storefront.
+Owner-confirmed customer product: Telegram bot. Owner-selected payment: Telegram Stars, directly per order; native whole-Star XTR accounting with no SAR conversion. [Stars contract](docs/TELEGRAM-STARS.md). Web is the existing operations/admin console, not a requested customer storefront.
 Local authority: [AGENTS.md](AGENTS.md).
 Reusable primary reference: [Master Governance](https://github.com/n923760-rgb/engineering-governance/blob/main/MASTER_GOVERNANCE.md).
 Reference navigation: [Global Reference](https://github.com/n923760-rgb/engineering-governance/blob/main/GLOBAL_REFERENCE.md).
