@@ -140,15 +140,20 @@ async def read_file(
 
 
 async def cleanup_expired_files(connection: asyncpg.Connection, storage: Storage, bucket: str) -> int:
-    """Delete a bounded locked batch; one provider failure does not roll back other deletes."""
+    """Delete up to 100 expired files, rotating provider failures behind older waiting work."""
     async with connection.transaction():
         rows = await connection.fetch(
             """SELECT id,storage_key FROM files WHERE status <> 'EXPIRED'
-               AND retention_until<=now() ORDER BY retention_until LIMIT 100
+               AND retention_until<=now()
+               ORDER BY COALESCE(cleanup_attempted_at,retention_until),id LIMIT 100
                FOR UPDATE SKIP LOCKED""",
         )
         deleted = 0
         for row in rows:
+            # Commit retry age with this batch; database errors/cancellation roll it back.
+            await connection.execute(
+                "UPDATE files SET cleanup_attempted_at=now() WHERE id=$1", row["id"],
+            )
             try:
                 await asyncio.to_thread(storage.delete_object, Bucket=bucket, Key=row["storage_key"])
             except OSError:

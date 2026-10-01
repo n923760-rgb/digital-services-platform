@@ -21,6 +21,7 @@ FACT: DSP-011 source correction merged PR #33 after run 36910685996: 104 tests, 
 FACT: DSP-013 review pagination merged PR #34 after run 36912070468: 105 tests, migration 0014, Python/web/Compose and Chromium page/session checks PASS; mutable queue and production-load limits remain documented.
 FACT: Cleanup isolation PR #35 qualified in run 36913178393 (108 tests/Python/web/Compose/Chromium PASS).
 FACT: Advisory run 36913998955 reports Python 57 packages/0 skips/0 vulnerabilities, but npm has PostCSS advisories affecting 2 packages. This is dependency evidence, not live compromise. PostCSS remedy PR #37 merged after run 36914794140: only PostCSS locked version changed, npm audit reports zero vulnerabilities, 108 tests/Chromium/Compose PASS. Audit PR #36 merged after exact-source advisory run 36915439443 (Python 57/0 skips/0 known vulnerabilities, npm production 0) and Foundation 36915439377 (108 tests, web/Compose/Chromium PASS). Scans are time-dependent and scoped, not full security/release certification.
+Cleanup retry-fairness increment: PR #39, based on dad592bc5a0e65f2c84c1381f75984001e50d27c, adds migration 0015 and retry-age ordering without changing retention or batch capacity. Regression-only run 36937601796 reproduced full-batch starvation (108 existing PASS, new regression FAIL). Final qualification status/source are recorded in the PR body and exact-source runs, not inferred from this preparation snapshot. [Task report](REPORTS/2026-10-01-CLEANUP_RETRY_FAIRNESS.md).
 UNKNOWN: deployed instance, actual Telegram provider sends and production payment/storage/recovery.
 Paid orders and new service activation remain off by default.
 
@@ -104,6 +105,6 @@ A customer website is not in current scope. Notification and operational control
 ## 12. Exact Immediate Next Round
 
 Ordinary diagnosed source repairs and review/evidence consolidation are qualified in the linked PRs; [checkpoint](REPORTS/2026-10-01-POST_REPAIR_REVIEW.md). Next dependent work: owner-selected provider and an authorized disposable Telegram/staging environment, then actual end-to-end and production storage/recovery. Pending owner choices are not approval; never request secret values in chat.
-Independent future bounded work can diagnose notifications, remaining list/retention fairness and OS/artifact/load gates from verified main, without inventing SLA/privacy/capacity or enabling paid operations.
+Retention-fairness source and qualification are tracked in PR #39; source correctness does not establish production cleanup capacity. Independent future bounded work can diagnose notifications and OS/artifact/load gates from verified main, without inventing SLA/privacy/capacity or enabling paid operations.
 Actual Telegram staging still requires an authorized disposable bot/environment and provider credentials supplied through its secret store. Do not request tokens in chat or claim actual Telegram sends from mocked adapter tests.
 Keep paid orders/uploads gated until provider, safety and production qualification requirements are met.
