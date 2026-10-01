@@ -1,6 +1,5 @@
 """Authenticated, read-only operations API; permissions are always checked server-side."""
 
-import hashlib
 from contextlib import asynccontextmanager
 from typing import Any, Literal
 from urllib.parse import urlsplit
@@ -24,6 +23,7 @@ from platform_core.custom_requests import (
     CustomRequestTransitionRejected,
     triage_request,
 )
+from platform_core.login_limits import login_allowed
 from platform_core.service_registry import (
     ServiceNotFound,
     ServiceRevisionConflict,
@@ -58,8 +58,8 @@ def check_origin(request: Request) -> None:
 
 
 class LoginForm(BaseModel):
-    username: str
-    password: str
+    username: str = Field(min_length=1, max_length=64)
+    password: str = Field(min_length=1, max_length=1024)
 
 
 async def identity(request: Request) -> AdminIdentity:
@@ -146,18 +146,19 @@ class CustomRequestTriageForm(BaseModel):
 @router.post("/login")
 async def login(request: Request, form: LoginForm, response: Response):
     check_origin(request)
-    # One limit per IP+username, including unknown users; do not log raw usernames.
     ip = request.client.host if request.client else "unknown"
-    key = "admin:login:" + hashlib.sha256(
-        (ip + ":" + form.username.strip().lower()).encode()
-    ).hexdigest()
+    settings = get_settings()
     try:
-        count = await request.app.state.redis.incr(key)
-        if count == 1:
-            await request.app.state.redis.expire(key, 900)
+        allowed = await login_allowed(
+            request.app.state.redis, ip, form.username,
+            source_limit=settings.admin_login_source_limit,
+            account_limit=settings.admin_login_account_limit,
+            pair_limit=settings.admin_login_pair_limit,
+            window_seconds=settings.admin_login_window_seconds,
+        )
     except (RedisError, OSError) as exc:
         raise HTTPException(503, "Login temporarily unavailable") from exc
-    if count > 5:
+    if not allowed:
         raise HTTPException(429, "Too many attempts")
     async with database() as db:
         admin = await authenticate(db, form.username, form.password)
