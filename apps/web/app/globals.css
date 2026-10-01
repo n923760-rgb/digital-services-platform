@@ -1,0 +1,14 @@
+* { box-sizing: border-box; }
+body { font-family: system-ui, sans-serif; margin: clamp(12px, 4vw, 48px); color: #18383b; line-height: 1.6; }
+main, section, article, form, label, details, header > div { min-width: 0; }
+main { overflow-wrap: anywhere; }
+input, select, textarea { font: inherit; width: 100%; max-width: 100%; min-width: 0; padding: 10px; border: 1px solid #71878a; border-radius: 6px; }
+button, summary { font: inherit; min-height: 44px; }
+button { max-width: 100%; cursor: pointer; }
+button:disabled { cursor: wait; opacity: .7; }
+summary { padding-block: 8px; }
+:focus-visible { outline: 3px solid #176dba; outline-offset: 3px; }
+code { overflow-wrap: anywhere; }
+th, td { padding: 8px; }
+th { white-space: nowrap; }
+[role="alert"] { color: #8f1c16; }
