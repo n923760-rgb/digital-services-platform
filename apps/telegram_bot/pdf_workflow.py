@@ -13,10 +13,17 @@ from platform_core.files import InvalidFile, upload_file
 from platform_core.ledger import IdempotencyConflict, InsufficientFunds
 from platform_core.orders import ensure_telegram_user
 from platform_core.storage_s3 import S3Storage
+from platform_core.telegram_uploads import (
+    UPLOAD_INTENT_SECONDS,
+    UploadBusy,
+    UploadRejected,
+    admit_pdf_upload,
+    discard_unattached_input,
+    finish_pdf_upload,
+    upload_lock,
+)
 from platform_core.telegram_workflow import (
     StaleQuote,
-    active_workflow,
-    attach_pdf,
     cancel_active,
     confirm_pdf_merge,
     has_upload,
@@ -116,22 +123,47 @@ async def upload(message: Message, bot: Bot) -> None:
     connection = await asyncpg.connect(settings.database_url.replace("+asyncpg", ""))
     try:
         user_id = await ensure_telegram_user(connection, message.from_user.id)
-        if await has_upload(connection, user_id, message.message_id):
-            await message.answer("الملف مضاف مسبقًا ✅")
-            return
-        if not await active_workflow(connection, user_id):
-            await message.answer("اختر «🔗 دمج PDF» أولًا، ثم أرسل الملفات.")
-            return
-        data_buffer = BoundedBuffer(settings.max_upload_bytes)
-        await bot.download(document, destination=data_buffer)
-        record = await upload_file(
-            connection, storage_client(), settings.object_storage_bucket, user_id,
-            document.file_name or "", document.mime_type or "", data_buffer.getvalue(),
-            limit=settings.max_upload_bytes, retention_days=settings.file_retention_days,
-        )
-        workflow = await attach_pdf(connection, user_id, record.id, message.message_id)
+        async with upload_lock(connection, user_id):
+            if await has_upload(connection, user_id, message.message_id):
+                await message.answer("الملف مضاف مسبقًا ✅")
+                return
+            admission = await admit_pdf_upload(
+                connection, user_id, document.file_size,
+                max_upload_bytes=settings.max_upload_bytes,
+                max_user_upload_bytes=settings.max_user_upload_bytes,
+            )
+            data_buffer = BoundedBuffer(admission.byte_limit)
+            await bot.download(document, destination=data_buffer)
+            storage = storage_client()
+            record = await upload_file(
+                connection, storage, settings.object_storage_bucket, user_id,
+                document.file_name or "", document.mime_type or "", data_buffer.getvalue(),
+                limit=admission.byte_limit, retention_days=settings.file_retention_days,
+                intent_retention_seconds=UPLOAD_INTENT_SECONDS,
+            )
+            try:
+                workflow = await finish_pdf_upload(
+                    connection, user_id, record.id, message.message_id, admission,
+                    retention_days=settings.file_retention_days,
+                )
+            except BaseException:
+                # Also clean up cancellation, then re-raise it rather than swallowing it.
+                try:
+                    await discard_unattached_input(
+                        connection, storage, settings.object_storage_bucket, user_id, record.id,
+                    )
+                except Exception:
+                    logger.exception("unattached_upload_cleanup_failed",
+                                     extra={"file_id": str(record.id)})
+                raise
+            await message.answer(
+                f"وصل الملف {workflow.file_count} ✅ أرسل الباقي، أو اضغط «✅ مراجعة السعر»."
+            )
+    except UploadBusy:
+        await message.answer("جارٍ رفع ملفك السابق. انتظر وصول التأكيد ثم أرسل الملف التالي.")
+    except UploadRejected:
         await message.answer(
-            f"وصل الملف {workflow.file_count} ✅ أرسل الباقي، أو اضغط «✅ مراجعة السعر»."
+            "تعذر قبول الملف: تحقق من الطلب النشط وحدّ عدد الملفات والحجم والمساحة المتاحة."
         )
     except InvalidFile:
         await message.answer("الملف غير صالح. أرسل PDF صحيحًا وبالحجم المسموح.")

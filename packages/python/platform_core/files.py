@@ -57,6 +57,7 @@ async def upload_file(
     owner_user_id: UUID, file_name: str, claimed_mime: str, data: bytes,
     *, order_id: UUID | None = None, file_type: str = "INPUT",
     limit: int = 20 * 1024 * 1024, retention_days: int = 30,
+    intent_retention_seconds: int | None = None,
 ) -> FileRecord:
     mime = identify(data, file_name, claimed_mime, limit)
     if file_type not in {"INPUT", "OUTPUT"} or not 1 <= retention_days <= 3650:
@@ -65,9 +66,14 @@ async def upload_file(
         owner = await connection.fetchval("SELECT user_id FROM orders WHERE id=$1", order_id)
         if owner != owner_user_id:
             raise InvalidFile("file order does not belong to owner")
+    if intent_retention_seconds is not None and not 1 <= intent_retention_seconds <= 3600:
+        raise InvalidFile("invalid upload intent retention")
     file_id = uuid4()
     key = f"users/{owner_user_id}/{file_id}{PurePosixPath(file_name).suffix.lower()}"
-    expires = datetime.now(UTC) + timedelta(days=retention_days)
+    expires = datetime.now(UTC) + (
+        timedelta(seconds=intent_retention_seconds) if intent_retention_seconds is not None
+        else timedelta(days=retention_days)
+    )
     # An intent row survives object-storage failure; a later cleanup can inspect FAILED rows.
     await connection.execute(
         """INSERT INTO files
