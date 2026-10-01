@@ -17,3 +17,10 @@ The job dispatcher reads PENDING rows from PostgreSQL on each scheduled pass and
 The admin "Needs Attention" section lists up to 20 recent failed jobs, deliveries, and payments per category. Stable IDs, service name, attempt counts and error codes help operators identify an incident. The endpoint requires server-side `admin:view` authorization and omits customer input, provider references and raw exception messages. Investigation and recovery still require controlled operational procedures; the dashboard does not retry or change financial state.
 
 The migrated PostgreSQL integration suite covers double submits, concurrent balance contention, refund of held funds through release, settlement replay, price snapshots, insufficient funds rollback, reasoned adjustments and database-enforced immutability. Use a dedicated disposable database when running tests; records use unique IDs but tests do not delete financial history.
+
+
+## Telegram offer consent
+
+Each persisted PDF workflow has a monotonically increasing quote_revision. Adding a new input or presenting another quote invalidates earlier offer buttons. Buttons carry the workflow identity and displayed revision within Telegram's 64-byte callback limit; confirmation checks that revision under the workflow lock before creating an order or returning a submitted order. Same-offer replay remains idempotent. Price changes still require a new quote.
+
+Legacy buttons without a revision fail closed. After migrating existing workflows, customers must review the price again to receive a versioned button. Keep one current quote visible where possible, but message edits alone are not the consent boundary. Actual Telegram staging sends/restarts still require separate qualification.

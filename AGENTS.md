@@ -23,12 +23,16 @@ One canonical roadmap: ENGINEERING/MASTER_ROADMAP.md.
 Reports: ENGINEERING/REPORTS/. Sanitized evidence indexes: ENGINEERING/EVIDENCE/.
 A new/re-baseline first round is read-only and produces a Master Engineering Baseline Report before implementation. Review/audit/diagnosis alone does not authorize source changes. Prior explicit owner implementation instructions persist; do not ask again for already authorized ordinary work.
 
+## Owner-approved product direction
+
+The owner confirmed on 2026-10-01 that the customer product is a Telegram bot. Prioritize private Telegram journeys, menus, intake, consent, fulfillment and customer status. The existing web app is an operations/admin surface; a separate customer website is not in the requested scope. Preserve the channel-independent domain core and server-side authorization. Do not remove working admin tooling just because the customer channel is Telegram.
+
 ## Product boundaries and invariants
 
 - Telegram/HTTP/web are adapters. Application state, prices, wallet, orders and job transitions belong in platform_core and PostgreSQL.
 - Integer halalas only for persisted money. Wallet entries are the source of financial truth; lock the wallet row for writes. Preserve idempotency, append-only history and one reserve/settlement per order.
 - Capture only after actual delivery receipt. Terminal processing/delivery failure releases held funds. Do not equate ledger RELEASE with a provider refund.
-- Bind customer confirmation to the exact offered price and inputs; DSP-001 remains unresolved until evidence closes it.
+- Bind customer confirmation to the exact offered price and inputs. Follow the live roadmap for DSP-001 qualification; versioned callbacks are a server-enforced consent boundary.
 - Enforce owner/file/expiry and admin permissions server side. React visibility is not authorization.
 - Production worker PDF parsing must remain in the no-network sandbox with limits and no application secrets. Signature checks/active-content rejection are not malware clearance.
 - TELEGRAM_ORDERS_ENABLED and SERVICE_ACTIVATION_ENABLED default off. Do not enable paid operations without an authorized, qualified launch task.

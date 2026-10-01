@@ -101,12 +101,18 @@ async def confirm_callback(callback: CallbackQuery) -> None:
         await callback.answer()
         return
     try:
-        workflow_id = UUID(callback.data.removeprefix("merge:confirm:"))
+        workflow_key, revision_text = callback.data.removeprefix("merge:confirm:").split(":")
+        workflow_id = UUID(workflow_key)
+        quote_revision = int(revision_text)
+        if not 1 <= quote_revision <= 2**31 - 1:
+            raise ValueError("invalid quote revision")
     except (ValueError, AttributeError):
         await callback.answer("تأكيد غير صالح.", show_alert=True)
         return
     await callback.answer()
-    await pdf_workflow.confirm(callback.message, workflow_id, callback.from_user.id)
+    await pdf_workflow.confirm(
+        callback.message, workflow_id, callback.from_user.id, quote_revision,
+    )
 
 
 async def show_catalog(message: Message) -> None:

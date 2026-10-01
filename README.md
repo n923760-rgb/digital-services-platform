@@ -2,6 +2,12 @@
 
 Independent modular-monolith foundation for the approved Saudi digital services platform. The project name and domain are deliberately provisional. Business operations are not enabled yet. The internal CORE-001 [PDF merge and financial workflow](docs/CORE-001.md) is under development; it does not accept live orders.
 
+## Product direction
+
+The customer product is a **Telegram bot**, as confirmed by the owner. Customer journeys belong in `apps/telegram_bot`; the existing Next.js web app serves internal operations/admin needs. A separate customer ordering website is not part of the current scope. Domain state remains channel-independent in `platform_core`.
+
+Repository engineering rules and the central reusable reference are linked from [AGENTS.md](AGENTS.md) and [PROJECT-SOURCES.md](PROJECT-SOURCES.md); follow the one [engineering roadmap](ENGINEERING/MASTER_ROADMAP.md) for current qualification and remaining work.
+
 ## Local startup
 
 Requirements: Docker with Compose V2. Port 80 must be available.

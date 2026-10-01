@@ -2,6 +2,7 @@
 
 Repository: https://github.com/n923760-rgb/digital-services-platform
 Official branch: main; always retrieve live HEAD rather than treating a stored SHA as current.
+Owner-confirmed customer product: Telegram bot. Web is the existing operations/admin console, not a requested customer storefront.
 Local authority: [AGENTS.md](AGENTS.md).
 Reusable primary reference: [Master Governance](https://github.com/n923760-rgb/engineering-governance/blob/main/MASTER_GOVERNANCE.md).
 Reference navigation: [Global Reference](https://github.com/n923760-rgb/engineering-governance/blob/main/GLOBAL_REFERENCE.md).
@@ -11,6 +12,7 @@ For another project: use the central [Universal Project Start Prompt](https://gi
 
 - [Master roadmap](ENGINEERING/MASTER_ROADMAP.md)
 - [Read-only baseline](ENGINEERING/REPORTS/2026-10-01-MASTER_BASELINE.md)
+- [Qualified repair report](ENGINEERING/REPORTS/2026-10-01-AUTHORIZED_REPAIRS.md)
 - [Evidence index](ENGINEERING/EVIDENCE/2026-10-01-BASELINE.md)
 - [Local skill catalog](.agents/skills/README.md)
 
