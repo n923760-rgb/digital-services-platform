@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,6 +23,10 @@ class Settings(BaseSettings):
     telegram_orders_enabled: bool = False
     service_activation_enabled: bool = False
     admin_cookie_secure: bool = True
+    admin_login_source_limit: int = Field(default=30, ge=1, le=1000)
+    admin_login_account_limit: int = Field(default=10, ge=1, le=1000)
+    admin_login_pair_limit: int = Field(default=5, ge=1, le=1000)
+    admin_login_window_seconds: int = Field(default=900, ge=60, le=86400)
     log_level: str = "INFO"
 
 

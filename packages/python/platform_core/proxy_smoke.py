@@ -1,6 +1,5 @@
 """Disposable Compose proof of proxy identity; refuses non-CI execution."""
 
-import hashlib
 import json
 import os
 import socket
@@ -10,6 +9,7 @@ from urllib.request import Request, urlopen
 from redis import Redis
 
 from platform_core.config import get_settings
+from platform_core.login_limits import login_keys
 
 
 def main() -> None:
@@ -18,7 +18,7 @@ def main() -> None:
     username = "ci-proxy-identity"
     with socket.create_connection(("caddy", 80), timeout=5) as connection:
         source_ip = connection.getsockname()[0]
-    key = "admin:login:" + hashlib.sha256((source_ip + ":" + username).encode()).hexdigest()
+    key = login_keys(source_ip, username)[2]
     redis = Redis.from_url(get_settings().redis_url)
     before = int(redis.get(key) or 0)
     headers = {
@@ -34,7 +34,7 @@ def main() -> None:
         except HTTPError as exc:
             assert exc.code == 401, f"unexpected login response: {exc.code}"
     assert int(redis.get(key) or 0) == before + 2, "client identity collapsed or spoofed"
-    spoofed = "admin:login:" + hashlib.sha256(("203.0.113.123:" + username).encode()).hexdigest()
+    spoofed = login_keys("203.0.113.123", username)[2]
     assert redis.get(spoofed) is None, "untrusted forwarded identity accepted"
     redis.close()
     print("Proxy identity smoke passed: trusted forwarding and direct-header rejection")

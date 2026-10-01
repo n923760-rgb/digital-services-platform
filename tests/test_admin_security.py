@@ -88,7 +88,7 @@ async def test_login_rate_limit_and_secure_cookie(db):
     password = "another unique and long owner password"
     await create_admin(db, name, password, role_code="OWNER")
     redis = AsyncMock()
-    redis.incr.side_effect = [1, 2, 6]
+    redis.eval.side_effect = [[1, 1, 1], [2, 2, 2], [3, 3, 6]]
     app.state.redis = redis
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="https://test") as client:
         form = {"username": name, "password": password}
@@ -146,3 +146,46 @@ async def test_attention_reports_failures_without_customer_data(db):
         assert all(len(payload[section]) <= 20 for section in ("jobs", "deliveries", "payments"))
         assert not {"user_id", "client_request_key", "provider_reference", "external_receipt"} & set(job)
         assert not {"user_id", "client_request_key", "provider_reference", "external_receipt"} & set(payment)
+
+
+@pytest.mark.asyncio
+async def test_login_limiter_outage_and_oversized_credentials_fail_closed(monkeypatch):
+    authenticate_mock = AsyncMock()
+    monkeypatch.setattr(admin_api, "authenticate", authenticate_mock)
+    redis = AsyncMock()
+    redis.eval.side_effect = OSError("private limiter outage")
+    app.state.redis = redis
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="https://test",
+    ) as client:
+        headers = {"Origin": "https://test"}
+        response = await client.post(
+            "/api/admin/login", headers=headers,
+            json={"username": "unknown-user", "password": "incorrect"},
+        )
+        assert response.status_code == 503 and "set-cookie" not in response.headers
+        redis.eval.assert_awaited_once()
+        response = await client.post(
+            "/api/admin/login", headers=headers,
+            json={"username": "x" * 65, "password": "incorrect"},
+        )
+        assert response.status_code == 422 and redis.eval.await_count == 1
+    authenticate_mock.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_login_malformed_limiter_response_does_not_authenticate(monkeypatch):
+    authenticate_mock = AsyncMock()
+    monkeypatch.setattr(admin_api, "authenticate", authenticate_mock)
+    redis = AsyncMock()
+    redis.eval.return_value = [1, 1]
+    app.state.redis = redis
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="https://test",
+    ) as client:
+        result = await client.post(
+            "/api/admin/login", headers={"Origin": "https://test"},
+            json={"username": "unknown-user", "password": "incorrect"},
+        )
+    assert result.status_code == 503
+    authenticate_mock.assert_not_awaited()
