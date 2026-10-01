@@ -78,7 +78,7 @@ def upgrade() -> None:
     )
 
     op.execute("""CREATE FUNCTION protect_star_invoice_snapshot() RETURNS trigger
-               LANGUAGE plpgsql AS $
+               LANGUAGE plpgsql AS $$
                BEGIN
                  IF ROW(NEW.user_id,NEW.workflow_id,NEW.quote_revision,NEW.service_id,
                         NEW.amount_stars,NEW.file_ids,NEW.terms_digest,NEW.terms_text,NEW.created_at)
@@ -91,7 +91,7 @@ def upgrade() -> None:
                    RAISE EXCEPTION 'Stars invoice snapshot is immutable';
                  END IF;
                  RETURN NEW;
-               END; $;""")
+               END; $$;""")
     op.execute("""CREATE TRIGGER star_invoice_snapshot BEFORE UPDATE ON star_invoices
                FOR EACH ROW EXECUTE FUNCTION protect_star_invoice_snapshot();""")
     op.create_index(

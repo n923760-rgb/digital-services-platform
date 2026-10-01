@@ -349,7 +349,8 @@ export default function AdminPage() {
         <p dir="ltr" style={{ textAlign: "right" }}>{service.slug} · {service.processor_type} · revision {service.revision}</p>
         {admin.role === "OWNER" ? <form key={service.revision} onSubmit={event => void saveService(event, service)} style={{ display: "grid", gap: 10, maxWidth: 500 }}>
           <label>الوصف<br /><textarea name="description" defaultValue={service.description_ar} maxLength={1000} rows={3} style={{ width: "100%" }} /></label>
-          <label>السعر بالنجوم<br /><input name="stars" inputMode="numeric" defaultValue={service.base_price_stars ?? ""} placeholder="غير محدد" /><small> تركه فارغًا يبقي السعر الحالي.</small></label>
+          <label>السعر بالنجوم<br /><input name="stars" inputMode="numeric" defaultValue={service.base_price_stars ?? ""} placeholder="غير محدد" aria-describedby={`stars-price-help-${service.id}`} /></label>
+          <small id={`stars-price-help-${service.id}`}>تركه فارغًا يبقي السعر الحالي.</small>
           <label>الإتاحة<br /><select name="enabled" defaultValue={String(service.enabled)} disabled={!service.enabled && !admin.service_activation_enabled}>
             <option value="false">معطّلة</option><option value="true">مفعّلة</option>
           </select></label>
