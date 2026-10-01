@@ -2,7 +2,7 @@
 
 Status: Telegram bot product — internal foundation, production qualification incomplete.
 Owner confirmed 2026-10-01: Telegram is the customer interface; existing web is operations/admin tooling.
-Task baseline: 635b979d136cb5516154f9409b87e1eb802ad3de. Historical attribution only; retrieve live main every session.
+Task baseline: 4caecbe0514d925df3c834327691130abf91c5d6. Historical attribution only; retrieve live main every session.
 [Baseline](REPORTS/2026-10-01-MASTER_BASELINE.md) · [Original CI blocker](REPORTS/2026-10-01-CI_QUALIFICATION.md) · [Qualified repairs](REPORTS/2026-10-01-AUTHORIZED_REPAIRS.md) · [Authority](../AGENTS.md)
 
 ## 1. Current Verified State
@@ -10,7 +10,7 @@ Task baseline: 635b979d136cb5516154f9409b87e1eb802ad3de. Historical attribution 
 FACT: bot-facing service foundation, integer SAR wallet, durable jobs/delivery, versioned PDF quote confirmation, completed-file retrieval and text service review intake.
 FACT: SQLAlchemy asyncio dependency correction and quote revision correction merged as separate PRs #24/#25 after Python/web/Compose CI PASS; latest repair suite reports 71 tests passed.
 FACT: governance/reference/six local skills merged in PR #23 after Python/web/Compose CI PASS; documentation does not establish runtime certification.
-DSP-004 implementation: pre-download count/byte/customer guards, per-customer upload serialization, original-workflow attachment and short-lived upload intents. Exact-source qualification and merge evidence belong to the associated pull request; no production claim. [Task report](REPORTS/2026-10-01-UPLOAD_ADMISSION.md).
+FACT: DSP-004 merged in PR #26; pre-download guards, per-customer serialization, original-workflow attachment and short intents qualified by CI run 36896881244 (82 tests, Python/web/Compose PASS). No production claim. [Task report](REPORTS/2026-10-01-UPLOAD_ADMISSION.md).
 UNKNOWN: deployed instance, actual Telegram provider sends, production payment/storage/recovery and operator-browser evidence.
 Paid orders and new service activation remain off by default.
 
@@ -30,8 +30,8 @@ DSP-001: PR #25, versioned offer callbacks and migration 0013, stale-price/input
 
 ## 4. Current Findings
 
-DSP-001 and DSP-014 closed for source/CI correction; real Telegram staging remains unqualified.
-Open: payment integration (002), production storage/recovery (003), upload admission/quota (004), aggregate byte/materialization (005), trusted proxy/login throttling (006/007), sandbox long-job liveness (008), truthful intake/customer notifications (009), locking/supply chain (010), admin mobile/accessibility (011), branch protection (012), docs/pagination/retention/scaling (013).
+DSP-001, DSP-004 and DSP-014 closed for source/CI correction; real Telegram staging remains unqualified.
+Open: payment integration (002), production storage/recovery (003), aggregate byte/materialization (005), trusted proxy/login throttling (006/007), sandbox long-job liveness (008), truthful intake/customer notifications (009), locking/supply chain (010), admin mobile/accessibility (011), branch protection (012), docs/pagination/retention/scaling (013).
 Root engineering authority and canonical planning address part of DSP-012; GitHub protection/settings remain unchanged.
 All remaining findings retain baseline FACT/INFERENCE/UNKNOWN classifications until diagnosed.
 
@@ -57,7 +57,7 @@ No browser/actual customer-message, production recovery or load evidence claimed
 ## 7. Ordered Engineering Gates
 
 1. Project authority/reference/skills and Telegram direction merged (PR #23).
-2. Qualify DSP-004 admission/quota implementation before public uploads; next bounded task: DSP-005 processor aggregate-byte/materialization limits.
+2. DSP-004 merged/CI qualified. Qualify DSP-005 processor preflight/read budgets; [task report](REPORTS/2026-10-01-PROCESSOR_INPUT_BUDGET.md).
 3. DSP-009 truthful bot intake text and explicit supported-input guidance; notification/status requirements for chosen service scope.
 4. DSP-006/007/008 independent proxy/Redis/sandbox-liveness diagnoses.
 5. Select and integrate payment provider with authenticated checkout/events and reconciliation.
@@ -92,7 +92,7 @@ A customer website is not in current scope. Notification and operational control
 
 ## 12. Exact Immediate Next Round
 
-Qualify the DSP-004 implementation using its real PostgreSQL tests and full existing CI. The associated PR is the canonical exact-head run/merge evidence.
-After successful qualification/merge, diagnose DSP-005 independently: ensure other internal processor callers cannot materialize excessive aggregate input before byte checks.
+Qualify DSP-005 processor input budgets using PostgreSQL regressions and full existing CI. The associated PR records exact-head test/run/merge evidence.
+After successful qualification/merge, diagnose DSP-009 independently: customer intake must describe the inputs actually supported and the real fulfillment/status path.
 Actual Telegram staging still requires an authorized disposable bot/environment and provider credentials supplied through its secret store. Do not request tokens in chat or claim actual Telegram sends from mocked adapter tests.
 Keep paid orders/uploads gated until provider, safety and production qualification requirements are met.
