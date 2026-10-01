@@ -16,6 +16,13 @@
     "requirements/dev.txt": "164db11a64182b9fe14968f0fe413a375833ce1fb84ab07232bcae8378f77874",
     "requirements/build.txt": "cbad77a6e48046b87865a7315acf7acfba0ffbdd6fc9bb28a3a0a281190f7152",
     "requirements/sandbox.txt": "403ab0337b94e397a5980538f2c8b2541dba12e762b970f1bd66830b3550f55e",
-    "apps/web/package-lock.json": "acbcfdc63eef3dad98c42f3231c05d380313797a62753467a997a49269b21ad4"
-  }
+    "apps/web/package-lock.json": "45956bae52efc92b224b790ddcd06c5476f74cfd00b2cb39d10eb8649237cfbb"
+  },
+  "updates": [
+    {
+      "source_commit": "95fb1aa4d2abbf0946bd1cf2d37b659dff457a59",
+      "artifact": "apps/web/package-lock.json",
+      "reason": "PostCSS 8.5.23 advisory remediation"
+    }
+  ]
 }

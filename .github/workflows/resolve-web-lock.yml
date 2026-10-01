@@ -1,7 +1,5 @@
 name: Resolve targeted web lock
 on:
-  push:
-    branches: [fix/postcss-advisories]
   workflow_dispatch:
 permissions:
   contents: read
