@@ -8,7 +8,12 @@ from uuid import uuid4
 import asyncpg
 import pytest
 from platform_core.admin_auth import create_admin
-from platform_core.custom_requests import begin_request, draft_user_id, submit_request, triage_request
+from platform_core.custom_requests import (
+    begin_request,
+    draft_user_id,
+    submit_request,
+    triage_request,
+)
 from platform_core.customer_status import recent_telegram_requests
 from platform_core.orders import confirm_order, ensure_telegram_user
 
