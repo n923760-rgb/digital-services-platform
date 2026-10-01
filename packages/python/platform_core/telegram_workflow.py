@@ -21,11 +21,12 @@ class Workflow:
     file_count: int
     quoted_price_halalas: int | None
     quote_revision: int = 0
+    quoted_price_stars: int | None = None
 
 
 async def active_workflow(connection: asyncpg.Connection, user_id: UUID) -> Workflow | None:
     row = await connection.fetchrow(
-        """SELECT w.id,w.status,w.quoted_price_halalas,w.quote_revision,
+        """SELECT w.id,w.status,w.quoted_price_halalas,w.quote_revision,w.quoted_price_stars,
            (SELECT count(*) FROM telegram_workflow_files f WHERE f.workflow_id=w.id) AS file_count
            FROM telegram_workflows w WHERE w.user_id=$1
            AND w.status IN ('COLLECTING','CONFIRMING')""",
@@ -35,7 +36,7 @@ async def active_workflow(connection: asyncpg.Connection, user_id: UUID) -> Work
         return None
     return Workflow(
         row["id"], row["status"], row["file_count"], row["quoted_price_halalas"],
-        row["quote_revision"],
+        row["quote_revision"], row["quoted_price_stars"],
     )
 
 
@@ -117,15 +118,20 @@ async def attach_pdf(
         )
         await connection.execute(
             """UPDATE telegram_workflows SET status='COLLECTING',quoted_price_halalas=NULL,
-               quote_revision=quote_revision+1,updated_at=now() WHERE id=$1""", row["id"],
+               quoted_price_stars=NULL,quoted_terms_digest=NULL,quote_revision=quote_revision+1,updated_at=now() WHERE id=$1""", row["id"],
         )
         return Workflow(row["id"], "COLLECTING", count + 1, None, row["quote_revision"] + 1)
 
 
-async def quote_pdf_merge(connection: asyncpg.Connection, user_id: UUID) -> Workflow:
+async def quote_pdf_merge(
+    connection: asyncpg.Connection, user_id: UUID, *, currency: str = "SAR",
+    terms_digest: str | None = None,
+) -> Workflow:
+    if currency not in {"SAR", "XTR"}:
+        raise ValueError("unsupported quote currency")
     async with connection.transaction():
         row = await connection.fetchrow(
-            """SELECT w.id,s.base_price_halalas,s.input_schema FROM telegram_workflows w
+            """SELECT w.id,s.base_price_halalas,s.base_price_stars,s.input_schema FROM telegram_workflows w
                JOIN services s ON s.id=w.service_id JOIN service_categories c ON c.id=s.category_id
                WHERE w.user_id=$1 AND w.status IN ('COLLECTING','CONFIRMING')
                AND s.enabled=true AND c.enabled=true FOR UPDATE OF w""",
@@ -141,14 +147,17 @@ async def quote_pdf_merge(connection: asyncpg.Connection, user_id: UUID) -> Work
         )
         if not schema.get("min_files", 0) <= count <= schema.get("max_files", 0):
             raise ValueError("more PDF files are required")
-        price = row["base_price_halalas"]
+        price = row["base_price_halalas"] if currency == "SAR" else None
+        stars = row["base_price_stars"] if currency == "XTR" else None
+        if currency == "XTR" and (stars is None or terms_digest is None):
+            raise ValueError("Stars price or terms unavailable")
         revision = await connection.fetchval(
             """UPDATE telegram_workflows SET status='CONFIRMING',quoted_price_halalas=$2,
-               quote_revision=quote_revision+1,updated_at=now() WHERE id=$1
+               quoted_price_stars=$3,quoted_terms_digest=$4,quote_revision=quote_revision+1,updated_at=now() WHERE id=$1
                RETURNING quote_revision""",
-            row["id"], price,
+            row["id"], price, stars, terms_digest if currency == "XTR" else None,
         )
-        return Workflow(row["id"], "CONFIRMING", count, price, revision)
+        return Workflow(row["id"], "CONFIRMING", count, price, revision, stars)
 
 
 async def confirm_pdf_merge(

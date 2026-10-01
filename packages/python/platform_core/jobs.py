@@ -20,7 +20,9 @@ async def pending_jobs(connection: asyncpg.Connection, limit: int = 100) -> list
         raise ValueError("invalid dispatch batch size")
     rows = await connection.fetch(
         """SELECT id,attempt_count + 1 AS next_attempt
-           FROM jobs WHERE status='PENDING' ORDER BY created_at,id LIMIT $1""",
+           FROM jobs WHERE status='PENDING' AND EXISTS
+           (SELECT 1 FROM orders o WHERE o.id=jobs.order_id
+            AND o.status IN ('RESERVED','QUEUED','PROCESSING')) ORDER BY created_at,id LIMIT $1""",
         limit,
     )
     return [(row["id"], row["next_attempt"]) for row in rows]
@@ -62,7 +64,7 @@ async def fail_job(
         raise ValueError("invalid error code")
     async with connection.transaction():
         job = await connection.fetchrow(
-            """SELECT j.order_id,j.status,j.attempt_count,j.max_attempts,o.user_id
+            """SELECT j.order_id,j.status,j.attempt_count,j.max_attempts,o.user_id,o.status AS order_status
                FROM jobs j JOIN orders o ON o.id=j.order_id WHERE j.id=$1 FOR UPDATE OF j,o""",
             claim.job_id,
         )
@@ -82,7 +84,11 @@ async def fail_job(
             claim.job_id, "FAILED" if exhausted else "PENDING", error_code, exhausted,
         )
         if exhausted:
-            await connection.execute("UPDATE orders SET status='FAILED' WHERE id=$1", claim.order_id)
+            if job["order_status"] != "REFUNDED":
+                await connection.execute("UPDATE orders SET status='FAILED' WHERE id=$1", claim.order_id)
+            from platform_core.stars_payments import request_star_refund
+
+            await request_star_refund(connection, claim.order_id)
             price = await connection.fetchval(
                 "SELECT price_snapshot_halalas FROM orders WHERE id=$1", claim.order_id,
             )
@@ -100,12 +106,14 @@ async def complete_job(
     """Move validated output to delivery queue; capture only after actual delivery."""
     async with connection.transaction():
         row = await connection.fetchrow(
-            """SELECT j.status,j.attempt_count,o.user_id FROM jobs j
+            """SELECT j.status,j.attempt_count,o.user_id,o.status AS order_status FROM jobs j
                JOIN orders o ON o.id=j.order_id WHERE j.id=$1 AND j.order_id=$2
                FOR UPDATE OF j,o""",
             claim.job_id, claim.order_id,
         )
-        if not row or row["status"] != "PROCESSING" or row["attempt_count"] != claim.attempt_number:
+        if (not row or row["status"] != "PROCESSING"
+                or row["order_status"] != "PROCESSING"
+                or row["attempt_count"] != claim.attempt_number):
             raise ValueError("attempt no longer active")
         valid = await connection.fetchval(
             """SELECT 1 FROM files WHERE id=$1 AND owner_user_id=$2 AND order_id=$3

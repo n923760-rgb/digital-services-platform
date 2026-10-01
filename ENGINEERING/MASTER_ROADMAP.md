@@ -22,6 +22,7 @@ FACT: DSP-013 review pagination merged PR #34 after run 36912070468: 105 tests, 
 FACT: Cleanup isolation PR #35 qualified in run 36913178393 (108 tests/Python/web/Compose/Chromium PASS).
 FACT: Advisory run 36913998955 reports Python 57 packages/0 skips/0 vulnerabilities, but npm has PostCSS advisories affecting 2 packages. This is dependency evidence, not live compromise. PostCSS remedy PR #37 merged after run 36914794140: only PostCSS locked version changed, npm audit reports zero vulnerabilities, 108 tests/Chromium/Compose PASS. Audit PR #36 merged after exact-source advisory run 36915439443 (Python 57/0 skips/0 known vulnerabilities, npm production 0) and Foundation 36915439377 (108 tests, web/Compose/Chromium PASS). Scans are time-dependent and scoped, not full security/release certification.
 Cleanup retry-fairness increment: PR #39, based on dad592bc5a0e65f2c84c1381f75984001e50d27c, adds migration 0015 and retry-age ordering without changing retention or batch capacity. Regression-only run 36937601796 reproduced full-batch starvation (108 existing PASS, new regression FAIL). Final qualification status/source are recorded in the PR body and exact-source runs, not inferred from this preparation snapshot. [Task report](REPORTS/2026-10-01-CLEANUP_RETRY_FAIRNESS.md).
+Stars integration increment: PR #40 uses native XTR invoices, durable polling receipts, per-order payment and provider-confirmed refund handling while preserving SAR history. Final source/result attribution lives in its PR body and exact-source runs; no live charge/refund or paid activation is inferred. [Task report](REPORTS/2026-10-01-TELEGRAM_STARS.md). [Contract](../docs/TELEGRAM-STARS.md).
 UNKNOWN: deployed instance, actual Telegram provider sends and production payment/storage/recovery.
 Paid orders and new service activation remain off by default.
 
@@ -72,7 +73,7 @@ Chromium browser evidence covers built Next.js with intercepted synthetic API on
 2. DSP-004 and DSP-005 merged/CI qualified; [task report](REPORTS/2026-10-01-PROCESSOR_INPUT_BUDGET.md).
 3. DSP-009 intake/status qualified in PR #28; automatic notifications remain a separate capability and no SLA is claimed.
 4. DSP-008/DSP-006/DSP-007 scoped source/CI corrections qualified.
-5. Select and integrate payment provider with authenticated checkout/events and reconciliation.
+5. Owner selected Telegram Stars and direct per-order payment. Implement/qualify the native XTR flow (PR #40), then actual bot payment/refund and dispute/recovery reconciliation.
 6. Qualify production storage/privacy/recovery and dependency/artifact reproducibility.
 7. Actual Telegram staging, operational reliability and operator-browser evidence; freeze candidate and owner launch decision.
 One coherent issue per branch/PR. No unrelated changes or automatic activation.
@@ -93,8 +94,8 @@ Merge authority received for these engineering changes does not authorize deploy
 
 ## 10. Owner Decisions
 
-Confirmed: Telegram bot is the customer product; merge qualified engineering changes.
-Open: brand/domain, launch services/prices/SLA, provider/refunds/disputes, privacy/retention, lab/staging/production budget and storage, GitHub protection settings.
+Confirmed: Telegram bot is the customer product; merge qualified engineering changes; payment uses Telegram Stars directly per order with owner-set Stars service prices.
+Open: brand/domain, launch services/Stars prices/SLA, final terms/support/refunds/disputes, privacy/retention, lab/staging/production budget and storage, GitHub protection settings.
 Continue already authorized ordinary work without redundant approval prompts; protected operations need scope for that operation.
 
 ## 11. Deferred Work
@@ -104,7 +105,7 @@ A customer website is not in current scope. Notification and operational control
 
 ## 12. Exact Immediate Next Round
 
-Ordinary diagnosed source repairs and review/evidence consolidation are qualified in the linked PRs; [checkpoint](REPORTS/2026-10-01-POST_REPAIR_REVIEW.md). Next dependent work: owner-selected provider and an authorized disposable Telegram/staging environment, then actual end-to-end and production storage/recovery. Pending owner choices are not approval; never request secret values in chat.
+Ordinary diagnosed source repairs and review/evidence consolidation are qualified in the linked PRs; [checkpoint](REPORTS/2026-10-01-POST_REPAIR_REVIEW.md). Payment provider and model are selected: Telegram Stars directly per order. Native integration/qualification is tracked in PR #40 and [Stars contract](../docs/TELEGRAM-STARS.md). Next dependent work: final owner-set Stars prices/terms/support and an authorized disposable Telegram environment for actual payment/refund, then production storage/recovery. Pending owner choices are not approval; never request secret values in chat.
 Retention-fairness source and qualification are tracked in PR #39; source correctness does not establish production cleanup capacity. Independent future bounded work can diagnose notifications and OS/artifact/load gates from verified main, without inventing SLA/privacy/capacity or enabling paid operations.
 Actual Telegram staging still requires an authorized disposable bot/environment and provider credentials supplied through its secret store. Do not request tokens in chat or claim actual Telegram sends from mocked adapter tests.
 Keep paid orders/uploads gated until provider, safety and production qualification requirements are met.

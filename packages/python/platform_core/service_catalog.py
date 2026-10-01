@@ -17,17 +17,20 @@ class CatalogService:
     name_ar: str
     category_name_ar: str
     price_halalas: int
+    price_stars: int | None = None
 
 
 async def available_services(
-    connection: asyncpg.Connection, *, service_id: UUID | None = None,
+    connection: asyncpg.Connection, *, service_id: UUID | None = None, currency: str = "SAR",
 ) -> list[CatalogService]:
     """Only expose enabled services with a registered, schema-compatible processor."""
+    if currency not in {"SAR", "XTR"}:
+        raise ValueError("unsupported catalog currency")
     slugs = list(PROCESSORS)
     if not slugs:
         return []
     rows = await connection.fetch("""SELECT s.id,s.slug,s.name_ar,s.input_schema,
-      s.base_price_halalas,c.name_ar AS category_name_ar
+      s.base_price_halalas,s.base_price_stars,c.name_ar AS category_name_ar
       FROM services s JOIN service_categories c ON c.id=s.category_id
       WHERE s.enabled=true AND c.enabled=true AND s.processor_type='tool'
       AND s.slug=ANY($1::text[]) AND ($2::uuid IS NULL OR s.id=$2)
@@ -37,10 +40,11 @@ async def available_services(
         schema = row["input_schema"]
         if isinstance(schema, str):
             schema = json.loads(schema)
-        if row["slug"] != "merge-pdf" or schema != PDF_INPUT_SCHEMA:
+        if (row["slug"] != "merge-pdf" or schema != PDF_INPUT_SCHEMA
+                or (currency == "XTR" and row["base_price_stars"] is None)):
             continue
         catalog.append(CatalogService(
             row["id"], row["slug"], row["name_ar"], row["category_name_ar"],
-            row["base_price_halalas"],
+            row["base_price_halalas"], row["base_price_stars"],
         ))
     return catalog

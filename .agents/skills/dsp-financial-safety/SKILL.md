@@ -15,6 +15,10 @@ Read root AGENTS.md and PROJECT-SOURCES.md, then the canonical roadmap and the r
 4. For quote/confirmation changes, coordinate with dsp-telegram-workflows; never accept a button that refers to a different offer. For a payment adapter use the owner-selected provider's current specification; test HMAC fixtures are not live integration.
 5. Report exact source, causal path, actual test evidence, unresolved reconciliation/crash windows and the next bounded task. Without PostgreSQL execution mark proof NOT RUN; static inference does not close financial qualification.
 
+## Owner-selected Telegram Stars increment
+
+Read docs/TELEGRAM-STARS.md and stars_payments.py/stars_inbox.py. Native XTR uses whole-Star invoice/order snapshots and immutable charge events, independently of the preserved SAR ledger. Never convert Stars or fund SAR from a Telegram receipt. Checkout approval starts no job; successful payment creates one order/job. Trace durable polling-before-offset, buyer/amount/currency/offer/terms matching, concurrent receipts, additional-charge refunds and refund-before-payment. Telegram collects before processing; recognize delivery after the real receipt and refund terminal failures through Telegram, never through SAR RELEASE. Require positive provider/history/refund-update evidence; unresolved cases stay pending. Keep live charge/refund/staging evidence separate from typed mocks and disposable PostgreSQL.
+
 ## Deliverable
 
 An attributable finding/result with FACT / INFERENCE / UNKNOWN / BLOCKED classification, actual PASS / FAIL / NOT RUN / SKIPPED evidence, exact source and next bounded action. Update the one canonical roadmap only when mutation is authorized; never create a competing plan.

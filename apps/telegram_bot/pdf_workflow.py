@@ -10,7 +10,6 @@ from aiogram import Bot
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 from platform_core.config import get_settings
 from platform_core.files import InvalidFile, upload_file
-from platform_core.ledger import IdempotencyConflict, InsufficientFunds
 from platform_core.orders import ensure_telegram_user
 from platform_core.storage_s3 import S3Storage
 from platform_core.telegram_uploads import (
@@ -23,13 +22,13 @@ from platform_core.telegram_uploads import (
     upload_lock,
 )
 from platform_core.telegram_workflow import (
-    StaleQuote,
     cancel_active,
-    confirm_pdf_merge,
     has_upload,
     quote_pdf_merge,
     start_pdf_merge,
 )
+
+from apps.telegram_bot.stars_payments import checkout_enabled, terms_digest
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -65,7 +64,7 @@ def quote_keyboard(workflow_id: UUID, quote_revision: int) -> InlineKeyboardMark
 
 
 async def begin(message: Message, telegram_user_id: int | None = None) -> None:
-    if not settings.telegram_orders_enabled:
+    if not checkout_enabled(settings):
         await message.answer("الخدمة قيد التجهيز حاليًا.")
         return
     connection = await asyncpg.connect(settings.database_url.replace("+asyncpg", ""))
@@ -89,19 +88,28 @@ async def begin(message: Message, telegram_user_id: int | None = None) -> None:
 
 async def show_quote(message: Message, connection: asyncpg.Connection, user_id: UUID) -> None:
     try:
-        workflow = await quote_pdf_merge(connection, user_id)
+        workflow = await quote_pdf_merge(
+            connection, user_id, currency="XTR", terms_digest=terms_digest(settings),
+        )
     except ValueError:
         await message.answer("أرسل ملفين PDF على الأقل قبل مراجعة السعر.")
         return
-    price = f"{workflow.quoted_price_halalas / 100:.2f} ر.س"
+    price = f"{workflow.quoted_price_stars} ⭐"
     await message.answer(
-        f"دمج {workflow.file_count} ملفات PDF. السعر: {price}. تؤكد الطلب؟",
-        reply_markup=quote_keyboard(workflow.id, workflow.quote_revision),
+        f"دمج {workflow.file_count} ملفات PDF. السعر: {price}.\n"
+        f"{settings.telegram_payment_terms.strip()}\n"
+        "الضغط على الزر يعني الموافقة على هذه الشروط وطلب فاتورة لهذا العرض.",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(
+                text="أوافق على الشروط وأدفع بالنجوم",
+                callback_data=f"stars:confirm:{workflow.id.hex}:{workflow.quote_revision}",
+            ),
+        ]]),
     )
 
 
 async def review(message: Message) -> None:
-    if not settings.telegram_orders_enabled:
+    if not checkout_enabled(settings):
         await message.answer("الخدمة قيد التجهيز حاليًا.")
         return
     connection = await asyncpg.connect(settings.database_url.replace("+asyncpg", ""))
@@ -113,7 +121,7 @@ async def review(message: Message) -> None:
 
 
 async def upload(message: Message, bot: Bot) -> None:
-    if not settings.telegram_orders_enabled:
+    if not checkout_enabled(settings):
         await message.answer("رفع الملفات غير متاح حاليًا.")
         return
     document = message.document
@@ -179,31 +187,8 @@ async def upload(message: Message, bot: Bot) -> None:
 async def confirm(
     message: Message, workflow_id: UUID, telegram_user_id: int, quote_revision: int,
 ) -> None:
-    if not settings.telegram_orders_enabled:
-        await message.answer("الطلبات غير متاحة حاليًا.")
-        return
-    connection = await asyncpg.connect(settings.database_url.replace("+asyncpg", ""))
-    try:
-        user_id = await ensure_telegram_user(connection, telegram_user_id)
-        order_id = await confirm_pdf_merge(
-            connection, user_id, workflow_id, expected_quote_revision=quote_revision,
-        )
-        await message.answer(f"تم تسجيل طلبك ✅ رقم الطلب: {order_id}")
-    except InsufficientFunds:
-        await message.answer("رصيدك غير كافٍ. لم يُنشأ الطلب ولم يُخصم أي مبلغ.")
-    except IdempotencyConflict:
-        await message.answer("هذا التأكيد يخص طلبًا مختلفًا. افتح طلبًا جديدًا.")
-    except StaleQuote:
-        await message.answer("هذا التأكيد يخص عرضًا قديمًا. راجع العرض الحالي وأكد من زره الجديد.")
-        await show_quote(message, connection, user_id)
-    except ValueError as exc:
-        if "price changed" in str(exc):
-            await message.answer("تغير السعر. راجع السعر الجديد وأكد مرة أخرى.")
-            await show_quote(message, connection, user_id)
-        else:
-            await message.answer("انتهى هذا التأكيد أو تغيرت الملفات. راجع طلبك مجددًا.")
-    finally:
-        await connection.close()
+    # Legacy SAR callbacks must never bypass the owner-selected Stars flow.
+    await message.answer("هذا تأكيد قديم. راجع عرض النجوم والشروط وأكد من زره الجديد.")
 
 
 async def cancel(message: Message) -> None:
