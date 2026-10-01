@@ -1,0 +1,9 @@
+# DSP-010 — locked build inputs
+Date 2026-10-01. Baseline 085462ca7c8f0234110507783dfbc85dc4be7e01; no conflicting PRs. Owner authorized continuing repairs and qualified merges. Root instructions/dsp-release-readiness applied; central reference previously read at 641e4f9e45da109257ba1f38752b94604c2e4531.
+FACT: Python bounds, npm installs, moving container tags and action refs allowed repeated builds to resolve different inputs.
+Read-only generation PASS: run 36907947844, source 2a602272e8b7b13fbe5b91d749a5abbfc918233d, job 110523126312. Public lock chunks reconstructed completely; 57 runtime/64 dev pins, hashed build and parser requirements, npm lock version 3 with 60 packages, six immutable image references. Toolchain Python 3.12.14/Node 22.23.3; pinned resolver metadata in requirements/resolution.json.
+Repair: deploy/CI install exact hashed requirements, npm ci, app wheel without dependency/build re-resolution, pinned build backend/images/actions and fingerprint/runtime-dev-parser consistency verification. Manual generator is read-only; no automatic pushes or deployments.
+Reviewed full generated pin lists, hash syntax, npm graph/integrities, manifests and source changes in Dockerfiles/Compose/CI/generator/verification/docs/roadmap. No secrets/provider integration/activation or production changes.
+At report creation final locked-head CI pending; associated PR records final head/run/log/test and merge proof. Local CLI/browser/production NOT RUN. Generation success is not install proof.
+Limits: locks are a dependency-input guarantee, not bit-for-bit artifacts, upstream trust, vulnerability clearance, image signatures or production release. Linux CI is the qualification platform; new architectures/toolchains require review.
+Next: DSP-011 admin mobile/accessibility, then reconcile remaining docs/scaling (DSP-013) and release-blocker records; owner provider/staging choices remain pending.

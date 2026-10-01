@@ -1,0 +1,21 @@
+{
+  "source_commit": "2a602272e8b7b13fbe5b91d749a5abbfc918233d",
+  "images": {
+    "python:3.12-slim": "python:3.12-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f",
+    "node:22-alpine": "node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402",
+    "postgres:16-alpine": "postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea",
+    "redis:7-alpine": "redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499",
+    "caddy:2-alpine": "caddy:2-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b",
+    "adobe/s3mock:5.2.2": "adobe/s3mock:5.2.2@sha256:e7c36014dcf4c7f0f6bec9de888477d1d9b8f55eceb7d9c1186f70d7aadf81ca"
+  },
+  "python": "3.12.14",
+  "node": "22.23.3",
+  "resolver": "pip-tools==7.5.0; pip==25.1.1",
+  "sha256": {
+    "requirements/runtime.txt": "4c0ee5c7c36b8d37ddae030bd78adb9567536707cd7faaf9879543c6d7bda9bf",
+    "requirements/dev.txt": "164db11a64182b9fe14968f0fe413a375833ce1fb84ab07232bcae8378f77874",
+    "requirements/build.txt": "cbad77a6e48046b87865a7315acf7acfba0ffbdd6fc9bb28a3a0a281190f7152",
+    "requirements/sandbox.txt": "403ab0337b94e397a5980538f2c8b2541dba12e762b970f1bd66830b3550f55e",
+    "apps/web/package-lock.json": "acbcfdc63eef3dad98c42f3231c05d380313797a62753467a997a49269b21ad4"
+  }
+}

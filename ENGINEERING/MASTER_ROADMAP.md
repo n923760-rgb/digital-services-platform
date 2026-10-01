@@ -2,7 +2,7 @@
 
 Status: Telegram bot product — internal foundation, production qualification incomplete.
 Owner confirmed 2026-10-01: Telegram is the customer interface; existing web is operations/admin tooling.
-Task baseline: 3d6465a3f6705e2458543efc8425f72f8b744e10. Historical attribution only; retrieve live main every session.
+Task baseline: 085462ca7c8f0234110507783dfbc85dc4be7e01. Historical attribution only; retrieve live main every session.
 [Baseline](REPORTS/2026-10-01-MASTER_BASELINE.md) · [Original CI blocker](REPORTS/2026-10-01-CI_QUALIFICATION.md) · [Qualified repairs](REPORTS/2026-10-01-AUTHORIZED_REPAIRS.md) · [Authority](../AGENTS.md)
 
 ## 1. Current Verified State
@@ -15,6 +15,7 @@ FACT: DSP-005 merged in PR #27 after run 36902438700: 90 tests and Python/web/Co
 FACT: PR #28 merged after run 36904542220 (95 tests and Python/web/Compose PASS): truthful intake, unsupported-media guidance and sender-owned status reads. Automatic triage notifications remain absent.
 FACT: DSP-008 sandbox progress heartbeat merged in PR #29 after run 36905174492: 97 tests and Python/web/Compose PASS. Full-duration hostile PDF/load evidence remains unqualified.
 FACT: DSP-006 merged in PR #30; run 36906472920 passed Python/web/Compose, 97 tests and actual two-source proxy/direct forged-header checks.
+FACT: DSP-007 merged in PR #31 after run 36907076671: 104 tests, actual Redis concurrency/expiry and Python/web/Compose/two-source proxy checks PASS.
 UNKNOWN: deployed instance, actual Telegram provider sends, production payment/storage/recovery and operator-browser evidence.
 Paid orders and new service activation remain off by default.
 
@@ -63,7 +64,7 @@ No browser/actual customer-message, production recovery or load evidence claimed
 1. Project authority/reference/skills and Telegram direction merged (PR #23).
 2. DSP-004 and DSP-005 merged/CI qualified; [task report](REPORTS/2026-10-01-PROCESSOR_INPUT_BUDGET.md).
 3. DSP-009 intake/status qualified in PR #28; automatic notifications remain a separate capability and no SLA is claimed.
-4. DSP-008/DSP-006 qualified; qualify DSP-007 atomic multi-scope login limits with actual Redis concurrency/expiry and HTTP failure checks.
+4. DSP-008/DSP-006/DSP-007 scoped source/CI corrections qualified.
 5. Select and integrate payment provider with authenticated checkout/events and reconciliation.
 6. Qualify production storage/privacy/recovery and dependency/artifact reproducibility.
 7. Actual Telegram staging, operational reliability and operator-browser evidence; freeze candidate and owner launch decision.
@@ -96,6 +97,6 @@ A customer website is not in current scope. Notification and operational control
 
 ## 12. Exact Immediate Next Round
 
-Qualify DSP-007 atomic multi-scope login limits; [report](REPORTS/2026-10-01-ATOMIC_LOGIN_LIMITS.md). Next bounded task: DSP-010 dependency locking and reproducible install diagnosis.
+Qualify DSP-010 hashed dependency/npm locks and immutable image/action inputs; [report](REPORTS/2026-10-01-DEPENDENCY_LOCKS.md). After qualified merge, address DSP-011 admin mobile/accessibility from verified source, with browser evidence explicitly separated.
 Actual Telegram staging still requires an authorized disposable bot/environment and provider credentials supplied through its secret store. Do not request tokens in chat or claim actual Telegram sends from mocked adapter tests.
 Keep paid orders/uploads gated until provider, safety and production qualification requirements are met.
