@@ -1,10 +1,12 @@
 """Validate types before upload, track failures and block expired/missing objects."""
 
 import os
+from unittest.mock import Mock
 from uuid import uuid4
 
 import asyncpg
 import pytest
+from botocore.exceptions import BotoCoreError, ClientError
 from platform_core.files import (
     FileUnavailable,
     InvalidFile,
@@ -14,6 +16,7 @@ from platform_core.files import (
     verify_file,
 )
 from platform_core.orders import ensure_telegram_user
+from platform_core.storage_s3 import S3Storage
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"test-bytes"
 
@@ -97,3 +100,59 @@ async def test_failed_storage_write_keeps_visible_failure(db):
     assert await db.fetchval(
         "SELECT status FROM files WHERE owner_user_id=$1", user_id,
     ) == "FAILED"
+
+
+@pytest.mark.asyncio
+async def test_cleanup_provider_failure_preserves_retry_and_commits_other_files(db, caplog):
+    user_id = await ensure_telegram_user(db, uuid4().int % (2**63 - 1) + 1)
+
+    class SelectiveStorage(FakeStorage):
+        blocked_key = None
+
+        def delete_object(self, *, Bucket, Key):
+            if Key == self.blocked_key:
+                raise OSError("private-provider-secret-and-storage-key")
+            return super().delete_object(Bucket=Bucket, Key=Key)
+
+    storage = SelectiveStorage()
+    blocked = await upload_file(db, storage, "test", user_id, "blocked.png", "image/png", PNG)
+    healthy = await upload_file(db, storage, "test", user_id, "healthy.png", "image/png", PNG)
+    live = await upload_file(db, storage, "test", user_id, "live.png", "image/png", PNG)
+    storage.blocked_key = blocked.storage_key
+    await db.execute(
+        "UPDATE files SET retention_until=now()-interval '2 seconds' WHERE id=$1", blocked.id,
+    )
+    await db.execute(
+        "UPDATE files SET retention_until=now()-interval '1 second' WHERE id=$1", healthy.id,
+    )
+    assert await cleanup_expired_files(db, storage, "test") >= 1
+    assert blocked.storage_key in storage.objects
+    assert healthy.storage_key not in storage.objects
+    assert live.storage_key in storage.objects
+    assert await db.fetchval("SELECT status FROM files WHERE id=$1", blocked.id) == "READY"
+    assert await db.fetchval("SELECT status FROM files WHERE id=$1", healthy.id) == "EXPIRED"
+    assert await db.fetchval("SELECT status FROM files WHERE id=$1", live.id) == "READY"
+    observer = await asyncpg.connect(os.environ["DATABASE_URL"].replace("+asyncpg", ""))
+    try:
+        assert await observer.fetchval("SELECT status FROM files WHERE id=$1", healthy.id) == "EXPIRED"
+    finally:
+        await observer.close()
+    assert any(record.message == "file_cleanup_delete_failed" for record in caplog.records)
+    assert "private-provider-secret" not in caplog.text
+    assert blocked.storage_key not in caplog.text
+    storage.blocked_key = None
+    assert await cleanup_expired_files(db, storage, "test") >= 1
+    assert blocked.storage_key not in storage.objects
+    assert await db.fetchval("SELECT status FROM files WHERE id=$1", blocked.id) == "EXPIRED"
+    assert live.storage_key in storage.objects
+
+
+@pytest.mark.parametrize("failure", [
+    ClientError({"Error": {"Code": "AccessDenied", "Message": "private object key"}}, "DeleteObject"),
+    BotoCoreError(),
+])
+def test_s3_delete_translates_provider_failures(failure):
+    client = Mock()
+    client.delete_object.side_effect = failure
+    with pytest.raises(OSError, match="storage deletion unavailable"):
+        S3Storage(client).delete_object(Bucket="test", Key="synthetic-key")

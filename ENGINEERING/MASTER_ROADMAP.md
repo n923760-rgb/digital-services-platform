@@ -2,7 +2,7 @@
 
 Status: Telegram bot product — internal foundation, production qualification incomplete.
 Owner confirmed 2026-10-01: Telegram is the customer interface; existing web is operations/admin tooling.
-Task baseline: befe98b22a7f6f99715250e26ff4c0e1d2efd44a. Historical attribution only; retrieve live main every session.
+Task baseline: 517ee6e504fe7d4ca488c78a36509b31f4fc87da. Historical attribution only; retrieve live main every session.
 [Baseline](REPORTS/2026-10-01-MASTER_BASELINE.md) · [Original CI blocker](REPORTS/2026-10-01-CI_QUALIFICATION.md) · [Qualified repairs](REPORTS/2026-10-01-AUTHORIZED_REPAIRS.md) · [Authority](../AGENTS.md)
 
 ## 1. Current Verified State
@@ -18,6 +18,7 @@ FACT: DSP-006 merged in PR #30; run 36906472920 passed Python/web/Compose, 97 te
 FACT: DSP-007 merged in PR #31 after run 36907076671: 104 tests, actual Redis concurrency/expiry and Python/web/Compose/two-source proxy checks PASS.
 FACT: DSP-010 merged PR #32 after exact-head run 36909223236: hashed Python/npm locks, immutable image/action inputs, clean installs, 104 tests and Python/web/Compose PASS. [Dependencies](../docs/DEPENDENCIES.md).
 FACT: DSP-011 source correction merged PR #33 after run 36910685996: 104 tests, Python/web/Compose and Chromium mobile/RTL/session journeys PASS. Browser uses built Next.js + intercepted synthetic API; live backend/browser and Telegram remain unqualified.
+FACT: DSP-013 review pagination merged PR #34 after run 36912070468: 105 tests, migration 0014, Python/web/Compose and Chromium page/session checks PASS; mutable queue and production-load limits remain documented.
 UNKNOWN: deployed instance, actual Telegram provider sends and production payment/storage/recovery.
 Paid orders and new service activation remain off by default.
 
@@ -100,6 +101,6 @@ A customer website is not in current scope. Notification and operational control
 
 ## 12. Exact Immediate Next Round
 
-Qualify DSP-013 bounded review pagination; [report](REPORTS/2026-10-01-REVIEW_PAGINATION.md). Continue source/CI diagnosis of retention/scaling without inventing production policy or load guarantees.
+Qualify DSP-013 expired-object cleanup failure isolation; [report](REPORTS/2026-10-01-CLEANUP_ISOLATION.md). After qualification, consolidate exact-source review evidence and remaining provider/staging/production decisions; do not infer launch readiness from CI.
 Actual Telegram staging still requires an authorized disposable bot/environment and provider credentials supplied through its secret store. Do not request tokens in chat or claim actual Telegram sends from mocked adapter tests.
 Keep paid orders/uploads gated until provider, safety and production qualification requirements are met.

@@ -1,6 +1,7 @@
 """Validated file metadata and S3 adapter boundary; no public upload endpoint yet."""
 
 import asyncio
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import PurePosixPath
@@ -8,6 +9,8 @@ from typing import Protocol
 from uuid import UUID, uuid4
 
 import asyncpg
+
+logger = logging.getLogger(__name__)
 
 
 class Storage(Protocol):
@@ -137,14 +140,21 @@ async def read_file(
 
 
 async def cleanup_expired_files(connection: asyncpg.Connection, storage: Storage, bucket: str) -> int:
-    """Delete expired objects before marking metadata expired; failures remain retryable."""
+    """Delete a bounded locked batch; one provider failure does not roll back other deletes."""
     async with connection.transaction():
         rows = await connection.fetch(
             """SELECT id,storage_key FROM files WHERE status <> 'EXPIRED'
                AND retention_until<=now() ORDER BY retention_until LIMIT 100
                FOR UPDATE SKIP LOCKED""",
         )
+        deleted = 0
         for row in rows:
-            await asyncio.to_thread(storage.delete_object, Bucket=bucket, Key=row["storage_key"])
+            try:
+                await asyncio.to_thread(storage.delete_object, Bucket=bucket, Key=row["storage_key"])
+            except OSError:
+                # Provider messages can contain keys, credentials or URLs; record only our metadata ID.
+                logger.warning("file_cleanup_delete_failed", extra={"file_id": str(row["id"])})
+                continue
             await connection.execute("UPDATE files SET status='EXPIRED' WHERE id=$1", row["id"])
-        return len(rows)
+            deleted += 1
+        return deleted
