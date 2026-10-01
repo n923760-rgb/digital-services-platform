@@ -2,7 +2,7 @@
 
 Status: Telegram bot product — internal foundation, production qualification incomplete.
 Owner confirmed 2026-10-01: Telegram is the customer interface; existing web is operations/admin tooling.
-Task baseline: 08087d7f2798aad6b7d7ffe02ebc0d9fbb31f6d9. Historical attribution only; retrieve live main every session.
+Task baseline: 6dd1e6897dda7fd1bf3b8ecc551cb4ec57c51ada. Historical attribution only; retrieve live main every session.
 [Baseline](REPORTS/2026-10-01-MASTER_BASELINE.md) · [Original CI blocker](REPORTS/2026-10-01-CI_QUALIFICATION.md) · [Qualified repairs](REPORTS/2026-10-01-AUTHORIZED_REPAIRS.md) · [Authority](../AGENTS.md)
 
 ## 1. Current Verified State
@@ -20,7 +20,7 @@ FACT: DSP-010 merged PR #32 after exact-head run 36909223236: hashed Python/npm 
 FACT: DSP-011 source correction merged PR #33 after run 36910685996: 104 tests, Python/web/Compose and Chromium mobile/RTL/session journeys PASS. Browser uses built Next.js + intercepted synthetic API; live backend/browser and Telegram remain unqualified.
 FACT: DSP-013 review pagination merged PR #34 after run 36912070468: 105 tests, migration 0014, Python/web/Compose and Chromium page/session checks PASS; mutable queue and production-load limits remain documented.
 FACT: Cleanup isolation PR #35 qualified in run 36913178393 (108 tests/Python/web/Compose/Chromium PASS).
-FACT: Advisory run 36913998955 reports Python 57 packages/0 skips/0 vulnerabilities, but npm has PostCSS advisories affecting 2 packages. This is dependency evidence, not live compromise. Audit PR #36 remains draft.
+FACT: Advisory run 36913998955 reports Python 57 packages/0 skips/0 vulnerabilities, but npm has PostCSS advisories affecting 2 packages. This is dependency evidence, not live compromise. PostCSS remedy PR #37 merged after run 36914794140: only PostCSS locked version changed, npm audit reports zero vulnerabilities, 108 tests/Chromium/Compose PASS. Audit PR #36 is being requalified against repaired main.
 UNKNOWN: deployed instance, actual Telegram provider sends and production payment/storage/recovery.
 Paid orders and new service activation remain off by default.
 
@@ -103,6 +103,6 @@ A customer website is not in current scope. Notification and operational control
 
 ## 12. Exact Immediate Next Round
 
-Qualify targeted PostCSS advisory remediation; [report](REPORTS/2026-10-01-POSTCSS_ADVISORIES.md). Then requalify advisory PR #36 against repaired main and consolidate review evidence.
+Qualify read-only advisory workflow PR #36 against repaired main; [report](REPORTS/2026-10-01-DEPENDENCY_AUDIT.md). Then consolidate the review and exact-source evidence register.
 Actual Telegram staging still requires an authorized disposable bot/environment and provider credentials supplied through its secret store. Do not request tokens in chat or claim actual Telegram sends from mocked adapter tests.
 Keep paid orders/uploads gated until provider, safety and production qualification requirements are met.
