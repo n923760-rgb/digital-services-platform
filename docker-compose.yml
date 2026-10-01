@@ -84,8 +84,13 @@ services:
       retries: 3
       start_period: 2m
   api:
+    networks:
+      default: {}
+      admin_proxy:
+        aliases: [api-proxy]
+        ipv4_address: ${API_PROXY_IP:-172.30.0.3}
     build: {context: ., dockerfile: Dockerfile.python}
-    command: ["uvicorn", "apps.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "127.0.0.1"]
+    command: ["uvicorn", "apps.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "${TRUSTED_PROXY_IP:-172.30.0.2},127.0.0.1"]
     env_file: .env
     environment:
       BACKUP_STATUS_PATH: /backup-status/latest
@@ -168,6 +173,10 @@ services:
       timeout: 5s
       retries: 5
   caddy:
+    networks:
+      default: {}
+      admin_proxy:
+        ipv4_address: ${TRUSTED_PROXY_IP:-172.30.0.2}
     image: caddy:2-alpine
     restart: unless-stopped
     ports: ["80:80", "443:443"]
@@ -189,3 +198,10 @@ volumes:
   pdf_jobs:
   backup_data:
   backup_status:
+
+networks:
+  admin_proxy:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${PROXY_NETWORK_SUBNET:-172.30.0.0/29}
