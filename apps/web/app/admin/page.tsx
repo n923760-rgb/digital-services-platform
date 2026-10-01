@@ -40,6 +40,7 @@ export default function AdminPage() {
   const sessionEpoch = useRef(0);
   const refreshSequence = useRef(0);
   const clearSession = useCallback(() => {
+    ++sessionEpoch.current; setLoading(false);
     setAdmin(null); setOverview(null); setAttention(null); setOrders([]);
     setCustomRequests([]); setHasOlderRequests(false); setOlderRequestPage(false);
     setServices([]); setCategories([]);

@@ -30,7 +30,7 @@ async function open(browser, { authenticated = true, role = "OWNER", paged = fal
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await context.newPage();
   const state = { authenticated, role, loginCount: 0, logoutCount: 0, logoutFails: false,
-    loginGate: null, overviewGate: null, pageGate: null, pageFails: false, olderCount: 0, cursors: [] };
+    loginGate: null, overviewGate: null, pageGate: null, pageFails: false, pageUnauthorized: false, olderCount: 0, cursors: [] };
   const firstPage = Array.from({ length: 50 }, (_, index) => ({
     ...fixture["custom-requests"][0], id: "00000000-0000-4000-8000-" + String(50 - index).padStart(12, "0"),
     updated_at: "2026-10-01T12:00:00.123456Z",
@@ -57,6 +57,7 @@ async function open(browser, { authenticated = true, role = "OWNER", paged = fal
       const params = new URL(route.request().url()).searchParams;
       if (!params.has("before_id")) return route.fulfill({ json: firstPage });
       state.olderCount++; state.cursors.push(Object.fromEntries(params));
+      if (state.pageUnauthorized) return route.fulfill({ status: 401, json: { detail: "expired session" } });
       if (state.pageFails) return route.fulfill({ status: 503, json: { detail: "synthetic outage" } });
       if (state.pageGate) await state.pageGate.promise;
       return route.fulfill({ json: [oldRequest] });
@@ -200,7 +201,24 @@ async function noOverflow(page, label) {
     assert.equal(await pagination.page.getByLabel("كلمة المرور", { exact: true }).count(), 1);
     assert.deepEqual(pagination.errors, []);
     await pagination.context.close();
-    console.log("PASS bounded older/latest pages, timestamp precision, retry, duplicate and late-page logout guards");
+    const expiry = await open(browser, { paged: true });
+    expiry.state.overviewGate = gate();
+    await expiry.page.getByLabel("سبب بدء المراجعة", { exact: true }).first().fill("سبب اختبار موثق فقط");
+    const expiryRefreshStarted = expiry.page.waitForRequest("**/api/admin/overview");
+    await expiry.page.getByRole("button", { name: "بدء المراجعة", exact: true }).first().click();
+    await expiryRefreshStarted;
+    expiry.state.pageUnauthorized = true;
+    await expiry.page.getByRole("button", { name: "عرض طلبات أقدم", exact: true }).click();
+    await expiry.page.getByLabel("كلمة المرور", { exact: true }).waitFor();
+    const expiredRefresh = expiry.page.waitForResponse("**/api/admin/overview");
+    expiry.state.overviewGate.release();
+    await (await expiredRefresh).finished();
+    await expiry.page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    assert.equal(await expiry.page.getByLabel("كلمة المرور", { exact: true }).count(), 1);
+    assert.equal(await expiry.page.getByRole("button", { name: "تسجيل الخروج", exact: true }).count(), 0);
+    assert.deepEqual(expiry.errors, []);
+    await expiry.context.close();
+    console.log("PASS bounded pages/precision/retry/duplicate/late logout and expired-page stale-refresh guards");
     console.log("Admin browser checks PASS (built Next.js + mocked admin API; no production/Telegram claim)");
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
