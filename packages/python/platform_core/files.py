@@ -95,7 +95,7 @@ async def upload_file(
 
 async def verify_file(
     connection: asyncpg.Connection, storage: Storage, bucket: str,
-    owner_user_id: UUID, file_id: UUID,
+    owner_user_id: UUID, file_id: UUID, *, max_bytes: int | None = None,
 ) -> FileRecord:
     row = await connection.fetchrow(
         """SELECT storage_key,mime_type,size_bytes FROM files
@@ -104,6 +104,8 @@ async def verify_file(
     )
     if not row:
         raise FileUnavailable("file unavailable or expired")
+    if max_bytes is not None and not 0 < row["size_bytes"] <= max_bytes:
+        raise FileUnavailable("file exceeds the read byte budget")
     try:
         response = await asyncio.to_thread(
             storage.head_object, Bucket=bucket, Key=row["storage_key"],
@@ -117,9 +119,11 @@ async def verify_file(
 
 async def read_file(
     connection: asyncpg.Connection, storage: Storage, bucket: str,
-    owner_user_id: UUID, file_id: UUID,
+    owner_user_id: UUID, file_id: UUID, *, max_bytes: int | None = None,
 ) -> bytes:
-    record = await verify_file(connection, storage, bucket, owner_user_id, file_id)
+    record = await verify_file(
+        connection, storage, bucket, owner_user_id, file_id, max_bytes=max_bytes,
+    )
     try:
         data = await asyncio.to_thread(
             storage.read_object, Bucket=bucket, Key=record.storage_key,

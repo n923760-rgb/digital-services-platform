@@ -20,3 +20,11 @@ A PostgreSQL session advisory lock permits only one in-flight bot upload per cus
 Attachment must target the original workflow ID. Cancellation/replacement cannot move an in-flight file into a newer workflow. A new upload intent initially expires after one hour; successful attachment and extension to normal retention commit together. Attachment failure/cancellation attempts immediate cleanup, without deleting an attached/order-owned file. Storage deletion failures retain expired metadata for hourly retry. A process crash or cancellation during storage I/O leaves its short-lived intent available to scheduled cleanup; production object lifecycle remains required for provider writes completed after cleanup or loss of metadata.
 
 This admission protection does not prove aggregate-memory safety for other internal processor callers (DSP-005), account-creation/rate-abuse protection, antivirus clearance, or production recovery. Keep public paid uploads gated pending those qualifications.
+
+## Processor input budgets
+
+The PDF processor independently checks every ordered input before a storage HEAD/GET: two to ten ready, unexpired, owner-matching INPUT PDFs, each no larger than MAX_UPLOAD_BYTES, with no more than 40 MiB total. The query returns at most eleven rows so excessive counts fail without fetching an unbounded list. Wrong-type inputs are rejected rather than silently omitted.
+
+Each read then rechecks current owner/readiness/expiry and metadata size against the smaller of the per-file cap and remaining 40 MiB budget. Object HEAD size must match metadata; GET requests only that bounded size plus the adapter's one-byte overrun sentinel. Size mismatch fails without invoking either parser or creating output. Callers of read_file/verify_file can opt into a max_bytes guard; existing callers without it retain their behavior.
+
+These are raw input byte bounds, not a measured process RSS guarantee. The parent still retains accepted documents in memory; parser copies, output, decompression and concurrent processes require their existing sandbox limits and separate load qualification. PDF parsing and output validation remain in the existing isolated execution path.

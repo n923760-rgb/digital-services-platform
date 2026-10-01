@@ -8,14 +8,14 @@ from uuid import uuid4
 
 import asyncpg
 import pytest
-from platform_core import pdf_isolation
+from platform_core import pdf_isolation, processors
 from platform_core.delivery import (
     claim_delivery,
     fail_delivery,
     finish_delivery,
     recover_stale_deliveries,
 )
-from platform_core.files import upload_file
+from platform_core.files import FileUnavailable, upload_file
 from platform_core.jobs import claim_job, complete_job, fail_job
 from platform_core.ledger import Balance, IdempotencyConflict, balance, credit
 from platform_core.orders import acknowledge_delivery, confirm_order, ensure_telegram_user
@@ -30,16 +30,20 @@ from apps.telegram_bot.delivery import send_result
 class MemoryStorage:
     def __init__(self):
         self.objects = {}
+        self.heads = []
+        self.reads = []
 
     def put_object(self, *, Bucket, Key, Body, ContentType):
         self.objects[Key] = Body
 
     def head_object(self, *, Bucket, Key):
+        self.heads.append(Key)
         if Key not in self.objects:
             raise FileNotFoundError(Key)
         return {"ContentLength": len(self.objects[Key])}
 
     def read_object(self, *, Bucket, Key, MaxBytes):
+        self.reads.append((Key, MaxBytes))
         if Key not in self.objects:
             raise FileNotFoundError(Key)
         return self.objects[Key][:MaxBytes + 1]
@@ -278,3 +282,126 @@ async def test_stale_delivery_is_retried_without_capture(db, setup_order):
     assert await db.fetchval(
         "SELECT status FROM delivery_outbox WHERE id=$1", delivery.id,
     ) == "PENDING"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("sizes", [(15 * 1024 * 1024, 15 * 1024 * 1024, 15 * 1024 * 1024),
+                                   (21 * 1024 * 1024, 1)])
+async def test_processor_rejects_size_before_any_storage_read(db, setup_order, sizes):
+    user_id, service_id, storage, files = setup_order
+    if len(sizes) == 3:
+        extra = await upload_file(
+            db, storage, "test", user_id, "third.pdf", "application/pdf", blank_pdf(),
+        )
+        files = [*files, extra.id]
+    await credit(db, user_id, 700, "payment:byte-limit")
+    order_id = await confirm_order(db, user_id, service_id, "preflight-bytes", file_ids=files)
+    for file_id, size in zip(files, sizes, strict=True):
+        await db.execute("UPDATE files SET size_bytes=$2 WHERE id=$1", file_id, size)
+    with pytest.raises(InvalidPDF, match="byte budget"):
+        await process_pdf_merge(
+            db, storage, "test", order_id, max_upload_bytes=20 * 1024 * 1024,
+            retention_days=30,
+        )
+    assert storage.heads == storage.reads == []
+    assert await db.fetchval(
+        "SELECT count(*) FROM files WHERE order_id=$1 AND file_type='OUTPUT'", order_id,
+    ) == 0
+    assert await balance(db, user_id) == Balance(0, 700)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("change", ["expiry", "owner", "type"])
+async def test_processor_preflight_rejects_unavailable_inputs(db, setup_order, change):
+    user_id, service_id, storage, files = setup_order
+    await credit(db, user_id, 700, "payment:input-change")
+    order_id = await confirm_order(db, user_id, service_id, "unavailable-input", file_ids=files)
+    if change == "expiry":
+        await db.execute(
+            "UPDATE files SET retention_until=now()-interval '1 second' WHERE id=$1", files[1],
+        )
+    elif change == "owner":
+        other_user = await ensure_telegram_user(db, uuid4().int % (2**63 - 1) + 1)
+        await db.execute("UPDATE files SET owner_user_id=$2 WHERE id=$1", files[1], other_user)
+    else:
+        await db.execute("UPDATE files SET mime_type='image/png' WHERE id=$1", files[1])
+    with pytest.raises(ValueError, match="input unavailable"):
+        await process_pdf_merge(
+            db, storage, "test", order_id, max_upload_bytes=20 * 1024 * 1024,
+            retention_days=30,
+        )
+    assert storage.heads == storage.reads == []
+
+
+@pytest.mark.asyncio
+async def test_processor_rechecks_growth_against_remaining_budget(db, setup_order, monkeypatch):
+    user_id, service_id, storage, files = setup_order
+    await credit(db, user_id, 700, "payment:growing-input")
+    order_id = await confirm_order(db, user_id, service_id, "growing-input", file_ids=files)
+    total = await db.fetchval(
+        "SELECT sum(size_bytes) FROM files WHERE id=ANY($1::uuid[])", files,
+    )
+    monkeypatch.setattr(processors, "MAX_INPUT_BYTES", total)
+    actual_read = processors.read_file
+    calls = 0
+
+    async def change_before_read(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            await db.execute("UPDATE files SET size_bytes=$2 WHERE id=$1", files[1], total)
+        return await actual_read(*args, **kwargs)
+
+    monkeypatch.setattr(processors, "read_file", change_before_read)
+    with pytest.raises(FileUnavailable, match="read byte budget"):
+        await process_pdf_merge(
+            db, storage, "test", order_id, max_upload_bytes=20 * 1024 * 1024,
+            retention_days=30,
+        )
+    assert calls == 2 and len(storage.heads) == len(storage.reads) == 1
+    assert await db.fetchval(
+        "SELECT count(*) FROM files WHERE order_id=$1 AND file_type='OUTPUT'", order_id,
+    ) == 0
+
+
+@pytest.mark.asyncio
+async def test_processor_accepts_exact_aggregate_boundary(db, setup_order, monkeypatch):
+    user_id, service_id, storage, files = setup_order
+    await credit(db, user_id, 700, "payment:exact-boundary")
+    order_id = await confirm_order(db, user_id, service_id, "exact-boundary", file_ids=files)
+    total = await db.fetchval(
+        "SELECT sum(size_bytes) FROM files WHERE id=ANY($1::uuid[])", files,
+    )
+    monkeypatch.setattr(processors, "MAX_INPUT_BYTES", total)
+    result_id = await process_pdf_merge(
+        db, storage, "test", order_id, max_upload_bytes=20 * 1024 * 1024,
+        retention_days=30,
+    )
+    assert sum(limit for _, limit in storage.reads) == total
+    assert len(storage.reads) == 2
+    assert await db.fetchval("SELECT file_type FROM files WHERE id=$1", result_id) == "OUTPUT"
+
+
+@pytest.mark.asyncio
+async def test_processor_caps_get_when_object_grows_after_head(db, setup_order, monkeypatch):
+    user_id, service_id, storage, files = setup_order
+    await credit(db, user_id, 700, "payment:object-growth")
+    order_id = await confirm_order(db, user_id, service_id, "object-growth", file_ids=files)
+    actual_head = storage.head_object
+
+    def grow_after_head(**kwargs):
+        response = actual_head(**kwargs)
+        storage.objects[kwargs["Key"]] += b"x"
+        return response
+
+    monkeypatch.setattr(storage, "head_object", grow_after_head)
+    with pytest.raises(FileUnavailable, match="changed during download"):
+        await process_pdf_merge(
+            db, storage, "test", order_id, max_upload_bytes=20 * 1024 * 1024,
+            retention_days=30,
+        )
+    assert len(storage.reads) == 1
+    assert storage.reads[0][1] < len(storage.objects[storage.reads[0][0]])
+    assert await db.fetchval(
+        "SELECT count(*) FROM files WHERE order_id=$1 AND file_type='OUTPUT'", order_id,
+    ) == 0
