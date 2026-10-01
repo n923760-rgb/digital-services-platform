@@ -2,7 +2,7 @@
 
 Status: Telegram bot product — internal foundation, production qualification incomplete.
 Owner confirmed 2026-10-01: Telegram is the customer interface; existing web is operations/admin tooling.
-Task baseline: fb12a3e49c930f58a1884e01ea60b1b5e5b98727. Historical attribution only; retrieve live main every session.
+Task baseline: befe98b22a7f6f99715250e26ff4c0e1d2efd44a. Historical attribution only; retrieve live main every session.
 [Baseline](REPORTS/2026-10-01-MASTER_BASELINE.md) · [Original CI blocker](REPORTS/2026-10-01-CI_QUALIFICATION.md) · [Qualified repairs](REPORTS/2026-10-01-AUTHORIZED_REPAIRS.md) · [Authority](../AGENTS.md)
 
 ## 1. Current Verified State
@@ -17,7 +17,8 @@ FACT: DSP-008 sandbox progress heartbeat merged in PR #29 after run 36905174492:
 FACT: DSP-006 merged in PR #30; run 36906472920 passed Python/web/Compose, 97 tests and actual two-source proxy/direct forged-header checks.
 FACT: DSP-007 merged in PR #31 after run 36907076671: 104 tests, actual Redis concurrency/expiry and Python/web/Compose/two-source proxy checks PASS.
 FACT: DSP-010 merged PR #32 after exact-head run 36909223236: hashed Python/npm locks, immutable image/action inputs, clean installs, 104 tests and Python/web/Compose PASS. [Dependencies](../docs/DEPENDENCIES.md).
-UNKNOWN: deployed instance, actual Telegram provider sends, production payment/storage/recovery and operator-browser evidence.
+FACT: DSP-011 source correction merged PR #33 after run 36910685996: 104 tests, Python/web/Compose and Chromium mobile/RTL/session journeys PASS. Browser uses built Next.js + intercepted synthetic API; live backend/browser and Telegram remain unqualified.
+UNKNOWN: deployed instance, actual Telegram provider sends and production payment/storage/recovery.
 Paid orders and new service activation remain off by default.
 
 ## 2. Architecture
@@ -37,7 +38,8 @@ DSP-001: PR #25, versioned offer callbacks and migration 0013, stale-price/input
 ## 4. Current Findings
 
 DSP-001, DSP-004, DSP-005 and DSP-014 closed for source/CI correction; real Telegram staging remains unqualified.
-Open: payment integration (002), production storage/recovery (003), trusted proxy/login throttling (006/007), sandbox long-job liveness (008), truthful intake/customer notifications (009), locking/supply chain (010), admin mobile/accessibility (011), branch protection (012), docs/pagination/retention/scaling (013).
+Scoped source/CI corrections qualified: proxy/throttle (006/007), sandbox heartbeat (008), truthful intake/customer status (part of 009), dependency inputs (part of 010), admin mobile/session interaction (part of 011).
+Open: payment integration (002), production storage/recovery (003), actual Telegram/automatic notifications (009), release artifact/supply chain qualification (010), live admin/session/accessibility evidence (011), branch protection (012), review pagination/retention/scaling (013).
 Root engineering authority and canonical planning address part of DSP-012; GitHub protection/settings remain unchanged.
 All remaining findings retain baseline FACT/INFERENCE/UNKNOWN classifications until diagnosed.
 
@@ -58,7 +60,7 @@ All remaining findings retain baseline FACT/INFERENCE/UNKNOWN classifications un
 Local commands NOT RUN in this API-only session. External CI executes disposable PostgreSQL/Compose checks.
 Real Telegram bot/token, live/sandbox payment account and production storage credentials not exercised.
 No live launch configuration, traffic/business profitability or approved full business specification was supplied.
-No browser/actual customer-message, production recovery or load evidence claimed.
+Chromium browser evidence covers built Next.js with intercepted synthetic API only. No actual customer-message, production recovery or load evidence claimed.
 
 ## 7. Ordered Engineering Gates
 
@@ -98,6 +100,6 @@ A customer website is not in current scope. Notification and operational control
 
 ## 12. Exact Immediate Next Round
 
-Qualify DSP-011 admin mobile/session interaction; [report](REPORTS/2026-10-01-ADMIN_MOBILE.md). Browser evidence uses a built app with synthetic intercepted admin API; keep it separate from live provider/backend qualification.
+Qualify DSP-013 bounded review pagination; [report](REPORTS/2026-10-01-REVIEW_PAGINATION.md). Continue source/CI diagnosis of retention/scaling without inventing production policy or load guarantees.
 Actual Telegram staging still requires an authorized disposable bot/environment and provider credentials supplied through its secret store. Do not request tokens in chat or claim actual Telegram sends from mocked adapter tests.
 Keep paid orders/uploads gated until provider, safety and production qualification requirements are met.
