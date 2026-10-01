@@ -24,8 +24,8 @@ Historical merges and CI are evidence for their actual source, not certification
 
 ## 4. Current Findings
 
-Open DSP-001–DSP-013 in baseline section N. No finding was fixed by the audit.
-Highest confirmed consent design gap: DSP-001 stale quote button lacks quote version.
+Open DSP-001–DSP-013 in baseline section N; later DSP-014 clean-install failure in the [CI addendum](REPORTS/2026-10-01-CI_QUALIFICATION.md). No finding was fixed by the audit.
+First build blocker: DSP-014 missing SQLAlchemy asyncio/greenlet dependency, observed in new PR CI. Highest consent design gap: DSP-001 stale quote button lacks quote version.
 Other code diagnoses: upload admission/quota (004), aggregate size/memory (005), proxy/throttle (006/007), sandbox liveness (008), mobile layout (011).
 Product/qualification gaps: payments (002), storage/recovery (003), intake messaging/notifications (009), reproducibility (010), governance (012), docs/scaling (013).
 Use separate bounded implementation PRs; don't combine this ledger into one repair branch.
@@ -34,6 +34,7 @@ Use separate bounded implementation PRs; don't combine this ledger into one repa
 
 | Gate | Blocking evidence |
 | --- | --- |
+| Clean install/build | DSP-014 required asyncio dependency and migrated tests/Compose |
 | Customer consent | DSP-001 old quote/input buttons rejected deterministically |
 | Paid flow | real verified provider, refunds/disputes/reconciliation and consent E2E |
 | Customer files | production S3/IAM, safety controls, quotas and ownership/expiry proof |
@@ -51,7 +52,7 @@ Static source review and historical CI must remain distinguishable from observed
 ## 7. Ordered Engineering Gates
 
 1. Governance adoption PR: AGENTS/reference/resource map/roadmap/report/evidence/local skills. Prepared under owner request; merge remains owner-protected.
-2. Qualify disposable Linux lab against existing Python/web/Compose checks.
+2. Qualify disposable Linux lab and correct DSP-014 in a separate dependency-only task; prove clean-install Python/migration/Compose checks.
 3. DSP-001 deterministic diagnosis, then one bounded consent correction with regression.
 4. DSP-004–008 separate input/resource/proxy/Redis/liveness diagnoses and remedies.
 5. Choose payment provider and implement its authenticated boundaries as coherent tasks.
@@ -88,7 +89,9 @@ Customer notices and operational controls required for chosen launch scope canno
 ## 12. Exact Immediate Next Round
 
 Complete/review governance adoption PR and inspect its exact-source CI. Do not merge automatically.
-Then qualify test lab and diagnose DSP-001 using two displayed quotes for one workflow:
+New qualification on documentation head 180324216ca932b27e3fcdc293c086e7680671ab: web PASS; Python/Compose FAIL due to missing greenlet with SQLAlchemy 2.1.1. See [CI addendum](REPORTS/2026-10-01-CI_QUALIFICATION.md). Historical baseline success remains unchanged evidence.
+First qualify test lab and diagnose/remediate DSP-014 in a separate bounded dependency task; this documentation PR does not fix it.
+Then diagnose DSP-001 using two displayed quotes for one workflow:
 quote A -> mutate price/inputs -> quote B -> activate A callback -> verify rejection without order/reservation.
 New valid quote confirms once; replay remains idempotent; independent customers remain isolated.
 Implementation is a separate bounded task, with no paid-operation enablement.
