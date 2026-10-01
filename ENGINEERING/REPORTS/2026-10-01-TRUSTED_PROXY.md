@@ -1,0 +1,8 @@
+# DSP-006 — explicit trusted proxy identity
+Date 2026-10-01. Baseline e9b9809c4ae8ffa8d71474180560171fd04b4471; no open PRs. Root authority, canonical roadmap and dsp-admin-security applied; continued fixes/qualified merging authorized by owner. Central reference previously reviewed at 641e4f9e45da109257ba1f38752b94604c2e4531. API/CI available; local browser/production NOT RUN.
+FACT: Uvicorn trusted only 127.0.0.1 while Caddy ran in another container. Forwarded customer source was therefore not the trusted client; pair login counters could collapse across clients.
+Repair: dedicated internal proxy network, explicit configurable Caddy IP in Uvicorn trust, API alias scoped to that network. No wildcard trust. Caddy's default untrusted incoming forwarded-header rejection preserved.
+Review: Compose, Caddyfile, .env.example nonsecret network settings, new guarded proxy_smoke.py, CI steps, proxy contract, canonical roadmap/report.
+Evidence planned: actual disposable Compose requests from worker and separate migrate container, same unknown username; assert each real source's counter and absence of forged-address key through both Caddy and direct API. Guard CI_PROXY_TEST=1 prevents accidental ordinary execution; unknown wrong credentials create no admin/session.
+At report preparation external CI pending; associated PR records exact head/run/log/merge proof. Production subnet/firewall/domain/browser and external HTTPS client testing NOT RUN. Default subnet must be adjusted together with proxy IP if deployment networks overlap.
+Next DSP-007: existing pair-only limiter uses non-atomic INCR/EXPIRE; add bounded account/source/pair protection and actual Redis concurrency/outage proof independently.

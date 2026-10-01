@@ -1,7 +1,7 @@
 {$SITE_ADDRESS} {
     encode zstd gzip
     handle /api/* {
-        reverse_proxy api:8000
+        reverse_proxy api-proxy:8000
     }
     handle {
         reverse_proxy web:3000

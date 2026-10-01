@@ -69,6 +69,8 @@ jobs:
       - run: docker compose exec -T backup sh /backup-scripts/check_freshness.sh
       - run: docker compose run --rm -T -e CI_RESTORE_TEST=1 backup sh /backup-scripts/restore_smoke.sh
       - run: docker compose exec -T worker python -m platform_core.pdf_sandbox_smoke
+      - run: docker compose exec -T -e CI_PROXY_TEST=1 worker python -m platform_core.proxy_smoke
+      - run: docker compose run --rm -T -e CI_PROXY_TEST=1 migrate python -m platform_core.proxy_smoke
       - run: curl --fail http://localhost/api/health/ready
       - run: curl --fail http://localhost/api/health/live
       - run: curl --fail http://localhost/web-health
