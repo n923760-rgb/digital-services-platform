@@ -73,6 +73,7 @@ async def has_upload(
 
 async def attach_pdf(
     connection: asyncpg.Connection, user_id: UUID, file_id: UUID, telegram_message_id: int,
+    *, expected_workflow_id: UUID | None = None,
 ) -> Workflow:
     if telegram_message_id <= 0:
         raise ValueError("invalid Telegram message ID")
@@ -83,8 +84,8 @@ async def attach_pdf(
                AND w.status IN ('COLLECTING','CONFIRMING') FOR UPDATE OF w""",
             user_id,
         )
-        if not row:
-            raise ValueError("no active file workflow")
+        if not row or (expected_workflow_id is not None and row["id"] != expected_workflow_id):
+            raise ValueError("no matching active file workflow")
         existing = await connection.fetchval(
             """SELECT file_id FROM telegram_workflow_files
                WHERE workflow_id=$1 AND telegram_message_id=$2""",
@@ -104,7 +105,7 @@ async def attach_pdf(
         valid = await connection.fetchval(
             """SELECT 1 FROM files WHERE id=$1 AND owner_user_id=$2
                AND file_type='INPUT' AND mime_type='application/pdf'
-               AND status='READY' AND retention_until>now()""",
+               AND status='READY' AND retention_until>now() FOR UPDATE""",
             file_id, user_id,
         )
         if not valid:
