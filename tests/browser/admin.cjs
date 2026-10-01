@@ -11,7 +11,10 @@ const fixture = {
     failed_jobs: 0, failed_deliveries: 0, new_custom_requests: 1, reviewing_custom_requests: 0,
     wallet_topups_today: 0, failed_payments: 0, pending_star_refunds: 2, pending_star_receipts: 1, backup: { status: "ok", last_success_at: timestamp } },
   orders: [{ id, status: "COMPLETED", channel: "TELEGRAM", service_name: long,
-    price_snapshot_halalas: 1250, currency: "SAR", created_at: timestamp, failed_jobs: 0 }],
+    price_snapshot_halalas: 1250, currency: "SAR", created_at: timestamp, failed_jobs: 0 },
+    { id: "00000000-0000-4000-8000-000000000002", status: "COMPLETED", channel: "telegram",
+      service_name: long, price_snapshot_halalas: 0, price_snapshot_stars: 37, currency: "XTR",
+      created_at: timestamp, failed_jobs: 0 }],
   attention: { jobs: [], deliveries: [], payments: [] },
   services: [{ id, slug: "pdf-merge", name_ar: long, description_ar: long, category_name_ar: long,
     processor_type: "tool", base_price_halalas: 1250, base_price_stars: 37, enabled: false, revision: 1 }],
@@ -118,6 +121,7 @@ async function noOverflow(page, label) {
     assert.notEqual(await region.evaluate(el => getComputedStyle(el).outlineStyle), "none");
     await page.keyboard.press("ArrowLeft");
     assert.equal(await page.locator('th[scope="col"]').count(), 5);
+    await page.locator("td").filter({ hasText: "37 ⭐" }).waitFor();
     const serviceForm = page.locator("form").filter({ has: page.getByRole("button", { name: "حفظ التعديل", exact: true }) });
     await serviceForm.getByLabel("السعر بالنجوم", { exact: true }).fill("37.5");
     await serviceForm.getByLabel("سبب التعديل", { exact: true }).fill("اختبار تحديث سعر النجوم فقط");
@@ -132,7 +136,7 @@ async function noOverflow(page, label) {
     assert.equal(state.serviceWrites[0].base_price_stars, 41);
     assert.equal(state.serviceWrites[0].base_price_halalas, 1250);
     await page.getByText("41 ⭐", { exact: false }).first().waitFor();
-    console.log("PASS integer Stars editor rejects fractions and preserves legacy SAR amount");
+    console.log("PASS native XTR order display and integer Stars editor; fractions rejected, SAR history preserved");
     assert.deepEqual(errors, []);
     await context.close();
 
