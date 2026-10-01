@@ -83,7 +83,7 @@ export default function AdminPage() {
         method: "POST", headers: { "Content-Type": "application/json" },
         credentials: "same-origin", body: JSON.stringify({ username: form.get("username"), password: form.get("password") }),
       });
-      if (!result.ok) throw new Error(result.status === 429 ? "محاولات كثيرة، حاول بعد 15 دقيقة" : "تعذر تسجيل الدخول، تحقق من البيانات");
+      if (!result.ok) throw new Error(result.status === 429 ? "محاولات كثيرة، حاول لاحقًا" : "تعذر تسجيل الدخول، تحقق من البيانات");
       await refresh();
     } catch (e) { setError(e instanceof Error ? e.message : "تعذر تسجيل الدخول"); }
     finally { authBusy.current = false; setAuthPending(false); }
@@ -95,7 +95,7 @@ export default function AdminPage() {
     ++sessionEpoch.current;
     try {
       const result = await fetch("/api/admin/logout", { method: "POST", credentials: "same-origin" });
-      if (!result.ok) throw new Error("تعذر تسجيل الخروج");
+      if (!result.ok && result.status !== 401) throw new Error("تعذر تسجيل الخروج");
       clearSession(); setError("");
     } catch { setError("تعذر تسجيل الخروج؛ حاول مرة أخرى"); }
     finally { authBusy.current = false; setAuthPending(false); }
@@ -103,6 +103,7 @@ export default function AdminPage() {
 
   async function saveService(event: FormEvent<HTMLFormElement>, service: Service) {
     event.preventDefault();
+    if (authBusy.current) return;
     const epoch = sessionEpoch.current;
     const fields = new FormData(event.currentTarget);
     const price = halalasFromInput(String(fields.get("price") ?? ""));
@@ -132,6 +133,7 @@ export default function AdminPage() {
 
   async function addCategory(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (authBusy.current) return;
     const epoch = sessionEpoch.current;
     const form = event.currentTarget;
     const fields = new FormData(form);
@@ -149,6 +151,7 @@ export default function AdminPage() {
 
   async function addService(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (authBusy.current) return;
     const epoch = sessionEpoch.current;
     const form = event.currentTarget;
     const fields = new FormData(form);
@@ -178,6 +181,7 @@ export default function AdminPage() {
 
   async function triageCustomRequest(event: FormEvent<HTMLFormElement>, item: CustomRequest, action: "START_REVIEW" | "DECLINE") {
     event.preventDefault();
+    if (authBusy.current) return;
     const epoch = sessionEpoch.current;
     const fields = new FormData(event.currentTarget);
     const reason = String(fields.get("reason") ?? "").trim();
@@ -204,8 +208,8 @@ export default function AdminPage() {
   if (!admin) return <main style={{ maxWidth: 410, margin: "10vh auto" }}>
     <h1>لوحة التشغيل</h1><p>سجّل الدخول للاطلاع على الطلبات وحالة التنفيذ.</p>
     <form onSubmit={signIn} style={{ ...card, display: "grid", gap: 14 }}>
-      <label>اسم المستخدم<br /><input name="username" maxLength={120} required autoComplete="username" style={{ width: "100%", padding: 10, boxSizing: "border-box" }} /></label>
-      <label>كلمة المرور<br /><input name="password" type="password" maxLength={256} required autoComplete="current-password" style={{ width: "100%", padding: 10, boxSizing: "border-box" }} /></label>
+      <label>اسم المستخدم<br /><input name="username" maxLength={64} required autoComplete="username" style={{ width: "100%", padding: 10, boxSizing: "border-box" }} /></label>
+      <label>كلمة المرور<br /><input name="password" type="password" maxLength={1024} required autoComplete="current-password" style={{ width: "100%", padding: 10, boxSizing: "border-box" }} /></label>
       <button type="submit" disabled={authPending} aria-busy={authPending} style={{ padding: 12, background: "#11484c", color: "white", border: 0, borderRadius: 8 }}>{authPending ? "جارٍ الدخول…" : "دخول"}</button>
     </form>{error && <p role="alert">{error}</p>}
   </main>;

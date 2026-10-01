@@ -80,6 +80,12 @@ async function noOverflow(page, label) {
       const badControls = await page.locator("input,select,textarea").evaluateAll(items =>
         items.filter(item => item.getBoundingClientRect().width > item.closest("form").getBoundingClientRect().width).length);
       assert.equal(badControls, 0);
+      const unlabeled = await page.locator("input,select,textarea").evaluateAll(items =>
+        items.filter(item => !item.labels?.length && !item.getAttribute("aria-label")).length);
+      assert.equal(unlabeled, 0);
+      const shortTargets = await page.locator("button,summary").evaluateAll(items =>
+        items.filter(item => item.getBoundingClientRect().height < 44).length);
+      assert.equal(shortTargets, 0);
       console.log("PASS RTL long Arabic/open forms viewport " + width);
     }
     // Doubled text size is a reflow check, not a claim of native browser zoom or screen-reader testing.
@@ -133,7 +139,9 @@ async function noOverflow(page, label) {
     await login.page.getByLabel("كلمة المرور", { exact: true }).waitFor();
     const lateResponse = login.page.waitForResponse("**/api/admin/overview");
     login.state.overviewGate.release();
-    await lateResponse;
+    const response = await lateResponse;
+    await response.finished();
+    await login.page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     await login.page.waitForFunction(() => !document.querySelector('button[aria-busy="true"]'));
     assert.equal(await login.page.getByRole("button", { name: "تسجيل الخروج", exact: true }).count(), 0);
     assert.equal(await login.page.getByLabel("كلمة المرور", { exact: true }).count(), 1);
