@@ -1,10 +1,12 @@
-# Digital Services Platform — FOUNDATION-001
+# Digital Services Platform
 
-Independent modular-monolith foundation for the approved Saudi digital services platform. The project name and domain are deliberately provisional. Business operations are not enabled yet. The internal CORE-001 [PDF merge and financial workflow](docs/CORE-001.md) is under development; it does not accept live orders.
+Saudi digital services platform for one developer, Arabic first/RTL, built as a Modular Monolith. Business operations are not enabled yet. The repository currently contains the gated [PDF merge and financial workflow](docs/CORE-001.md); the owner's requested small baseline and source differences are recorded in [scope](docs/SCOPE.md).
 
 ## Product direction
 
-The customer product is a **Telegram bot**, as confirmed by the owner. Customer journeys belong in `apps/telegram_bot`; the existing Next.js web app serves internal operations/admin needs. A separate customer ordering website is not part of the current scope. Domain state remains channel-independent in `platform_core`.
+**Telegram is the first customer channel**. The architecture is Python/FastAPI + aiogram + PostgreSQL with domain modules in `platform_core`. Prefer one service and direct execution until an actual owner-confirmed trigger justifies another feature or infrastructure. Keep handlers thin, financial writes atomic, failures classified/logged with an explicit policy, external providers behind simple adapters, and schema changes migration-only now that Alembic exists.
+
+Redis/ARQ, S3/PDF isolation and Next.js already exist in this source. The commands below run that existing deployment, not a simplified text-summary V0. Their presence does not make them requirements for future small services. Service selection and removal/replacement of runtime dependencies await the owner's service/trigger answer; see [architecture](docs/ARCHITECTURE.md).
 
 Repository engineering rules and the central reusable reference are linked from [AGENTS.md](AGENTS.md) and [PROJECT-SOURCES.md](PROJECT-SOURCES.md); follow the one [engineering roadmap](ENGINEERING/MASTER_ROADMAP.md) for current qualification and remaining work.
 
@@ -37,7 +39,7 @@ To run the Python checks locally, use the locked Python toolchain and [dependenc
 
 - `apps/api`: FastAPI HTTP transport and readiness probes.
 - `apps/telegram_bot`: aiogram channel entrypoint, no business logic.
-- `apps/web`: Next.js Arabic RTL foundation and authenticated read-only admin dashboard.
+- `apps/web`: existing Next.js Arabic RTL operations UI; OWNER writes and OPERATOR reads. Its expansion requires an actual trigger.
 - `packages/python/platform_core`: settings, logging, worker and health utilities.
 - `docs/FILES.md`: internal file validation and retention contract.
 - `migrations`: Alembic revision history.
@@ -49,7 +51,7 @@ To run the Python checks locally, use the locked Python toolchain and [dependenc
 
 ## Deployment notes
 
-For a public domain, set `SITE_ADDRESS` to the domain and point DNS to the host; Caddy obtains TLS certificates when reachable. Replace every demonstration password and credential. Never commit `.env`. PostgreSQL, Redis and the local S3 emulator have private Compose networking only; Caddy is the sole public entrypoint. **The included S3Mock is for local development and CI only: it must be replaced with a production S3-compatible provider before handling customer files.** Configure `OBJECT_STORAGE_ENDPOINT`, credentials and the pre-created bucket for that provider, and remove the emulator service in the production Compose override. The backup container creates local PostgreSQL snapshots; follow [backup and recovery](docs/BACKUP-RECOVERY.md) to establish encrypted off-host copies and verify recovery before production. The V1 production checklist in the approved specification remains mandatory.
+For a public domain, set `SITE_ADDRESS` to the domain and point DNS to the host; Caddy obtains TLS certificates when reachable. Replace every demonstration password and credential. Never commit `.env`. PostgreSQL, Redis and the local S3 emulator have private Compose networking only; Caddy is the sole public entrypoint. **The included S3Mock is for local development and CI only: it must be replaced with a production S3-compatible provider before handling customer files.** Configure `OBJECT_STORAGE_ENDPOINT`, credentials and the pre-created bucket for that provider, and remove the emulator service in the production Compose override. The backup container creates local PostgreSQL snapshots; follow [backup and recovery](docs/BACKUP-RECOVERY.md) to establish encrypted off-host copies and verify recovery before production. Qualification requirements apply to the selected live service and its actual dependencies; the historical V1 specification does not authorize adding more infrastructure.
 
 The Digital Store is a separate product and does not share this wallet, orders, or database. No store integration is included in FOUNDATION-001.
 

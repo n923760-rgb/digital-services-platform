@@ -7,6 +7,10 @@ description: Assess exact-source CI, operational prerequisites, provider/storage
 
 Read root AGENTS.md and PROJECT-SOURCES.md, then the canonical roadmap and the relevant contracts. Verify repository/branch/live HEAD and available execution capabilities. Current owner scope controls read-only versus implementation work. One confirmed problem or coherent feature per branch/PR; no unrelated fixes. Preserve secrets and use sanitized evidence.
 
+## Scope gate
+
+Read docs/SCOPE.md. Select evidence for the actual chosen service and existing affected dependencies. Do not turn release checklists into mandatory new infrastructure or feature work. Before proposing/implementing a new capability or complexity, ask whether its real trigger exists; a missing optional dashboard/queue is not a release defect by itself. Preserve atomic finance, classified/logged errors, provider boundaries and migration-only schema changes at every stage.
+
 ## Workflow
 
 1. Verify live main, relevant PRs, source SHA, complete diff, actual CI check names/results and release state. Read README, Compose/Dockerfiles, CI and backup/payment/file contracts.

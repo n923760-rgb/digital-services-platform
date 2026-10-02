@@ -23,9 +23,26 @@ One canonical roadmap: ENGINEERING/MASTER_ROADMAP.md.
 Reports: ENGINEERING/REPORTS/. Sanitized evidence indexes: ENGINEERING/EVIDENCE/.
 A new/re-baseline first round is read-only and produces a Master Engineering Baseline Report before implementation. Review/audit/diagnosis alone does not authorize source changes. Prior explicit owner implementation instructions persist; do not ask again for already authorized ordinary work.
 
+## Solo-developer scope and permanent rules
+
+Owner reset the project scope on 2026-10-02: Saudi market, Arabic first/RTL, one developer, and a Modular Monolith. Telegram is the first channel, not the architecture. The intended small baseline uses Python/FastAPI, aiogram and PostgreSQL; direct execution is the default for a small service.
+
+Before proposing or implementing any new feature or complexity, ask the owner: **هل المحفّز صار موجود فعلاً؟** Record the actual problem/trigger and the owner's answer in the canonical roadmap or task report. Unknown demand, theoretical future scale and "the next logical stage" do not satisfy the gate. An explicit owner request can authorize a named feature/technology; still establish its current trigger before implementation. Do not add queues, microservices, Redis/ARQ, Next.js, a full dashboard or generic frameworks by default. Diagnose existing defects and apply these explicitly requested rules without treating them as new product features.
+
+For a feature request, propose the smallest implementation that solves the current problem and preserves module boundaries. State clearly if it jumps a stage. Do not invent traffic thresholds, service prices, SLAs or provider choices.
+
+These rules apply at every stage, including V0:
+1. Keep Telegram/HTTP handlers thin: parse/authenticate input, invoke application functions, present the result. Business decisions and financial state belong in platform_core.
+2. Every financial database transition is one atomic transaction, including its ledger/receipt, state and idempotency changes. Never split related writes across commits. External provider I/O cannot be made atomic by a PostgreSQL transaction; call it outside locks and persist its verified outcome atomically. Retain explicit handling for uncertain outcomes.
+3. Never swallow failures silently. Classify expected rejection, temporary provider/infrastructure failure, financial uncertainty and unexpected fault; log a sanitized error code/class at the handling boundary and apply a stated response/retry/refund/stop policy. Do not leak tokens, provider response bodies or customer text; a customer error message alone is not logging.
+4. Every external AI/storage/payment provider is behind a small callable or interface/adapter. Keep provider SDK specifics out of business logic and handlers; a single implementation does not require a plugin framework.
+5. Once Alembic exists, every schema change uses a reviewed migration. This repository already uses Alembic through 0016: no create_all path, manual schema edits, migration-history deletion or destructive financial downgrade.
+
+Read [scope and architecture decision](docs/SCOPE.md). The owner's described V0 (text summarization, TOP_UP/CHARGE/REFUND, direct execution, create_all) is a desired baseline, not a verified description of this source. Existing PDF/Stars/worker/admin code and financial history must not be relabelled as V0 or deleted by assumption. Changing the live service/execution path requires the pending service/trigger answer and a bounded implementation round. Existing components do not establish demand for their expansion.
+
 ## Owner-approved product direction
 
-The owner confirmed on 2026-10-01 that the customer product is a Telegram bot. Prioritize private Telegram journeys, menus, intake, consent, fulfillment and customer status. The existing web app is an operations/admin surface; a separate customer website is not in the requested scope. Preserve the channel-independent domain core and server-side authorization. Do not remove working admin tooling just because the customer channel is Telegram.
+Telegram remains the first customer channel (confirmed 2026-10-01, refined 2026-10-02). Domain modules remain channel-independent. Next.js is an existing operations/admin surface, not a mandatory part of the target small baseline; a new customer website is outside scope. Assess simplification against the actual selected service and dependencies rather than expanding or removing existing tooling by assumption.
 
 ## Product boundaries and invariants
 

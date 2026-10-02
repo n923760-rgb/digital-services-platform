@@ -2,7 +2,7 @@
 
 Repository: https://github.com/n923760-rgb/digital-services-platform
 Official branch: main; always retrieve live HEAD rather than treating a stored SHA as current.
-Owner-confirmed customer product: Telegram bot. Owner-selected payment: Telegram Stars, directly per order; native whole-Star XTR accounting with no SAR conversion. [Stars contract](docs/TELEGRAM-STARS.md). Web is the existing operations/admin console, not a requested customer storefront.
+Owner-confirmed direction (2026-10-02): Saudi/Arabic-first platform, one developer, Modular Monolith; Telegram is the first channel. New features/complexity require an actual owner-confirmed trigger. [Scope decision](docs/SCOPE.md). Owner-selected payment: Telegram Stars, directly per order; native whole-Star XTR accounting with no SAR conversion. [Stars contract](docs/TELEGRAM-STARS.md). Web is the existing operations/admin console, not a requested customer storefront.
 Local authority: [AGENTS.md](AGENTS.md).
 Reusable primary reference: [Master Governance](https://github.com/n923760-rgb/engineering-governance/blob/main/MASTER_GOVERNANCE.md).
 Reference navigation: [Global Reference](https://github.com/n923760-rgb/engineering-governance/blob/main/GLOBAL_REFERENCE.md).
@@ -22,7 +22,7 @@ For another project: use the central [Universal Project Start Prompt](https://gi
 [financial/order core](docs/CORE-001.md), [payments](docs/PAYMENTS.md),
 [files](docs/FILES.md), [registry](docs/SERVICE-REGISTRY.md),
 [custom requests](docs/CUSTOM-REQUESTS.md), [recovery](docs/BACKUP-RECOVERY.md).
-Architecture milestone prose must be reconciled with live source; do not treat old claims of missing tables/dashboard as current facts.
+The current architecture contract separates the intended small baseline from existing source and historical foundation acceptance. A reported text-summary V0 is not present in this verified tree; service/execution selection is pending the owner response. Existing Alembic history remains authoritative.
 
 Application owners: packages/python/platform_core/. Adapters: apps/api/, apps/telegram_bot/, apps/web/.
 Schema: migrations/. Build/dependencies: pyproject.toml, apps/web/package.json, Dockerfiles and docker-compose.yml.
