@@ -109,7 +109,7 @@ async def unsupported(message: Message):
 
 @dispatcher.errors()
 async def errors(event: ErrorEvent, bot: Bot):
-    logger.error("summary_handler_failed", extra={"error_class": type(event.exception).__name__})
+    logger.error("summary_handler_failed:%s", type(event.exception).__name__)
     # Financial receipts remain persisted; do not log exception bodies or customer text.
     if event.update.message and event.update.message.chat.type == "private":
         try:

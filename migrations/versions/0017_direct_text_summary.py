@@ -57,7 +57,7 @@ def upgrade() -> None:
                (id,category_id,slug,name_ar,description_ar,processor_type,base_price_halalas,input_schema)
                SELECT 'c09ec7bb-d1a9-4be1-97af-f0c5c0390555',id,'summarize-text','تلخيص النص',
                       'تلخيص محلي باختيار جمل من النص؛ ليس ذكاء اصطناعيًا توليديًا.',
-                      'tool',0,'{"max_characters":4000}'::jsonb
+                      'tool',0,jsonb_build_object('max_characters',4000)
                FROM service_categories WHERE slug='text-services'
                ON CONFLICT (slug) DO NOTHING""")
 

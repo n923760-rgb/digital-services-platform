@@ -20,10 +20,10 @@ from platform_core.stars_payments import (
 )
 from platform_core.summary_orders import (
     acknowledge_summary,
-    require_no_legacy_work,
     execute_summary,
     quote_summary,
     recover_interrupted_summaries,
+    require_no_legacy_work,
 )
 from platform_core.text_summary import (
     SLUG,
@@ -164,7 +164,7 @@ async def test_refund_during_direct_provider_prevents_completion(summary_db, off
 @pytest.mark.asyncio
 async def test_input_snapshot_immutable_and_expired_input_refunds(summary_db, offer):
     db = summary_db
-    user, quote, invoice, charge = offer
+    _user, quote, invoice, charge = offer
     with pytest.raises(asyncpg.PostgresError):
         await db.execute("UPDATE summary_inputs SET input_text=$2 WHERE workflow_id=$1", quote.workflow_id, TEXT[::-1])
     with pytest.raises(asyncpg.PostgresError):

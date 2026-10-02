@@ -129,8 +129,8 @@ async def execute_summary(connection, telegram_user_id, order_id, summarizer=Non
     try:
         async with asyncio.timeout(5):
             result = validate_summary(await (summarizer or LocalSummarizer()).summarize(source))
-    except Exception as exc:  # noqa: BLE001 - classify, refund atomically, then propagate provider faults
-        logger.warning("summary_provider_failed", extra={"error_class": type(exc).__name__})
+    except Exception as exc:  # Classify, refund atomically and propagate; never hide provider faults.
+        logger.warning("summary_provider_failed:%s", type(exc).__name__)
         await fail_summary(connection, telegram_user_id, order_id)
         raise
     async with connection.transaction():

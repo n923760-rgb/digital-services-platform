@@ -50,7 +50,7 @@ def main():
     try:
         asyncio.run(configure(args))
     except (ValueError, PermissionError, RuntimeError, asyncpg.PostgresError, OSError) as exc:
-        logger.error("summary_setup_failed", extra={"error_class": type(exc).__name__})
+        logger.error("summary_setup_failed:%s", type(exc).__name__)
         raise SystemExit("Setup failed; check role, revision, price and activation configuration") from None
 
 
