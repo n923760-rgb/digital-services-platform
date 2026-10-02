@@ -33,24 +33,26 @@ def private(message):
 
 @dispatcher.message(CommandStart())
 @dispatcher.message(Command("summary"))
+@dispatcher.message(Command("services"))
 async def start(message: Message, bot: Bot):
     if private(message):
         await summary_ui.billing(bot, message.from_user.id)
-        await message.answer(
-            "خدمة تلخيص النص: أرسل نصًا من 20 إلى 4,000 حرف.\n"
-            "الملخص محلي ويختار جملًا من النص؛ ليس ذكاء اصطناعيًا توليديًا.\n"
-            "ستراجع السعر والشروط قبل الدفع بالنجوم. /orders للمتابعة، /cancel للإلغاء."
-        )
+        await summary_ui.show_products(message)
+
+
+@dispatcher.callback_query(F.data.startswith("product:select:"))
+async def select_product(callback: CallbackQuery):
+    await summary_ui.select_product(callback)
 
 
 @dispatcher.callback_query(F.data.startswith("stars:confirm:"))
 async def invoice(callback: CallbackQuery, bot: Bot):
-    await stars_payments.invoice(callback, bot, service_slug=SLUG)
+    await stars_payments.invoice(callback, bot, processor_key=SLUG)
 
 
 @dispatcher.pre_checkout_query()
 async def precheckout(query):
-    await stars_payments.precheckout(query, service_slug=SLUG)
+    await stars_payments.precheckout(query, processor_key=SLUG)
 
 
 @dispatcher.message(F.successful_payment | F.refunded_payment)
@@ -95,7 +97,7 @@ async def text(message: Message):
     if private(message):
         if message.text.startswith("/"):
             logger.info("summary_command_rejected")
-            await message.answer("الأوامر: /summary /orders /cancel /terms /paysupport")
+            await message.answer("الأوامر: /services /summary /orders /cancel /terms /paysupport")
         else:
             await summary_ui.quote(message)
 

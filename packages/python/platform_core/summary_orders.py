@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 
 from platform_core.ledger import _lock_wallet
 from platform_core.orders import ensure_telegram_user
+from platform_core.service_catalog import available_summary_products
 from platform_core.stars_payments import mark_star_delivery, request_star_refund
 from platform_core.telegram_workflow import cancel_active
 from platform_core.text_summary import (
@@ -27,6 +28,7 @@ class SummaryQuote:
     workflow_id: UUID
     revision: int
     price_stars: int
+    service_name: str = ""
 
 
 async def quote_summary(connection, telegram_user_id, message_id, text, terms, *, retention_days=30):
@@ -38,19 +40,29 @@ async def quote_summary(connection, telegram_user_id, message_id, text, terms, *
         user_id = await ensure_telegram_user(connection, telegram_user_id)
         await _lock_wallet(connection, user_id)
         existing = await connection.fetchrow(
-            """SELECT t.input_text,w.id,w.quote_revision,w.quoted_price_stars FROM summary_inputs t
-               JOIN telegram_workflows w ON w.id=t.workflow_id
+            """SELECT t.input_text,w.id,w.quote_revision,w.quoted_price_stars,s.name_ar FROM summary_inputs t
+               JOIN telegram_workflows w ON w.id=t.workflow_id JOIN services s ON s.id=w.service_id
                WHERE t.user_id=$1 AND t.telegram_message_id=$2""", user_id, message_id,
         )
         if existing:
             if existing["input_text"] != text:
                 raise ValueError("summary_message_reused")
-            return SummaryQuote(existing["id"], existing["quote_revision"], existing["quoted_price_stars"])
+            return SummaryQuote(existing["id"], existing["quote_revision"], existing["quoted_price_stars"], existing["name_ar"])
+        selected = await connection.fetchval(
+            """SELECT w.service_id FROM telegram_workflows w JOIN services s ON s.id=w.service_id
+               WHERE w.user_id=$1 AND w.status IN ('COLLECTING','CONFIRMING')
+               AND s.processor_key=$2 ORDER BY w.updated_at DESC,w.id DESC LIMIT 1""", user_id, SLUG,
+        )
+        if selected is None:
+            products = await available_summary_products(connection)
+            if len(products) != 1:
+                raise ValueError("summary_product_selection_required")
+            selected = products[0].id
         service = await connection.fetchrow(
-            """SELECT s.id,s.base_price_stars,s.input_schema FROM services s
+            """SELECT s.id,s.name_ar,s.base_price_stars,s.input_schema FROM services s
                JOIN service_categories c ON c.id=s.category_id
-               WHERE s.slug=$1 AND s.processor_type='tool' AND s.enabled AND c.enabled
-               AND s.base_price_stars IS NOT NULL FOR UPDATE OF s""", SLUG,
+               WHERE s.id=$1 AND s.processor_key=$2 AND s.processor_type='tool' AND s.enabled AND c.enabled
+               AND s.base_price_stars IS NOT NULL FOR UPDATE OF s""", selected, SLUG,
         )
         if not service:
             raise ValueError("summary_service_unavailable")
@@ -76,7 +88,7 @@ async def quote_summary(connection, telegram_user_id, message_id, text, terms, *
                VALUES ($1,$2,$3,$4,$5,now()+$6*interval '1 day')""", workflow_id, user_id,
             message_id, text, hashlib.sha256(text.encode()).hexdigest(), retention_days,
         )
-        return SummaryQuote(workflow_id, 1, service["base_price_stars"])
+        return SummaryQuote(workflow_id, 1, service["base_price_stars"], service["name_ar"])
 
 
 async def _owned_order(connection, telegram_user_id, order_id):
@@ -95,7 +107,7 @@ async def _owned_order(connection, telegram_user_id, order_id):
            JOIN star_invoices i ON i.order_id=o.id JOIN star_charges c ON c.order_id=o.id
            LEFT JOIN summary_inputs t ON t.workflow_id=i.workflow_id
            LEFT JOIN summary_results r ON r.order_id=o.id
-           WHERE o.id=$1 AND s.slug=$2 FOR UPDATE OF o""", order_id, SLUG,
+           WHERE o.id=$1 AND s.processor_key=$2 FOR UPDATE OF o""", order_id, SLUG,
     )
     if not row:
         raise ValueError("not_summary_order")
@@ -168,7 +180,7 @@ async def acknowledge_summary(connection, telegram_user_id, order_id, receipt):
 async def paid_summary_orders(connection, telegram_user_id=None):
     rows = await connection.fetch(
         """SELECT o.id,u.telegram_user_id FROM orders o JOIN services s ON s.id=o.service_id
-           JOIN users u ON u.id=o.user_id WHERE s.slug=$1
+           JOIN users u ON u.id=o.user_id WHERE s.processor_key=$1
            AND o.status IN ('QUEUED','AWAITING_FULFILLMENT')
            AND ($2::bigint IS NULL OR u.telegram_user_id=$2)
            ORDER BY o.created_at,o.id LIMIT 20""", SLUG, telegram_user_id,
@@ -180,7 +192,7 @@ async def recover_interrupted_summaries(connection):
     """One-poller startup recovery: uncertain interrupted work refunds, never auto-recharges."""
     rows = await connection.fetch(
         """SELECT o.id,u.telegram_user_id FROM orders o JOIN services s ON s.id=o.service_id
-           JOIN users u ON u.id=o.user_id WHERE s.slug=$1 AND o.status='PROCESSING'""", SLUG,
+           JOIN users u ON u.id=o.user_id WHERE s.processor_key=$1 AND o.status='PROCESSING'""", SLUG,
     )
     for row in rows:
         await fail_summary(connection, row["telegram_user_id"], row["id"])
@@ -190,7 +202,7 @@ async def recover_interrupted_summaries(connection):
 async def require_no_legacy_work(connection):
     active = await connection.fetchval(
         """SELECT count(*) FROM orders o JOIN services s ON s.id=o.service_id
-           WHERE s.slug<>$1 AND o.status IN
+           WHERE s.processor_key IS DISTINCT FROM $1 AND o.status IN
            ('RESERVED','QUEUED','PROCESSING','AWAITING_FULFILLMENT','FULFILLING')""", SLUG,
     )
     if active:
@@ -209,3 +221,28 @@ async def cancel_summary_offer(connection, telegram_user_id):
         "SELECT id FROM users WHERE telegram_user_id=$1", telegram_user_id,
     )
     return await cancel_active(connection, user_id) if user_id else False
+
+
+async def select_summary_product(connection, telegram_user_id, service_id):
+    """Persist private selection in the existing workflow; superseded unpaid quotes stop working."""
+    async with connection.transaction():
+        user_id = await ensure_telegram_user(connection, telegram_user_id)
+        await _lock_wallet(connection, user_id)
+        products = await available_summary_products(connection, service_id=service_id)
+        if not products:
+            raise ValueError("summary_product_unavailable")
+        current = await connection.fetchrow(
+            """SELECT id,service_id FROM telegram_workflows WHERE user_id=$1
+               AND status IN ('COLLECTING','CONFIRMING') FOR UPDATE""", user_id,
+        )
+        if current and current["service_id"] == service_id:
+            return products[0]
+        await connection.execute(
+            """UPDATE telegram_workflows SET status='CANCELLED',updated_at=now()
+               WHERE user_id=$1 AND status IN ('COLLECTING','CONFIRMING')""", user_id,
+        )
+        await connection.execute(
+            """INSERT INTO telegram_workflows (id,user_id,service_id,status)
+               VALUES ($1,$2,$3,'COLLECTING')""", uuid4(), user_id, service_id,
+        )
+        return products[0]

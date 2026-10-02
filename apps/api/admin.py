@@ -1,5 +1,6 @@
 """Authenticated operations API; permissions are always checked server-side."""
 
+import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, Literal
@@ -24,7 +25,7 @@ from platform_core.custom_requests import (
     CustomRequestTransitionRejected,
     triage_request,
 )
-from platform_core.login_limits import login_allowed
+from platform_core.login_limits import login_allowed, postgres_login_allowed
 from platform_core.service_registry import (
     ServiceNotFound,
     ServiceRevisionConflict,
@@ -38,6 +39,7 @@ from redis.exceptions import RedisError
 
 router = APIRouter(prefix="/api/admin")
 COOKIE_NAME = "platform_admin_session"
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -55,6 +57,7 @@ def check_origin(request: Request) -> None:
     host = request.headers.get("host", "")
     scheme = "https" if get_settings().admin_cookie_secure else "http"
     if parsed.scheme != scheme or parsed.netloc != host or parsed.path or not origin:
+        logger.info("admin_origin_rejected")
         raise HTTPException(403, "Invalid origin")
 
 
@@ -68,6 +71,7 @@ async def identity(request: Request) -> AdminIdentity:
     async with database() as db:
         admin = await load_session(db, token)
     if not admin:
+        logger.info("admin_session_rejected")
         raise HTTPException(401, "Sign in required")
     return admin
 
@@ -79,6 +83,7 @@ async def require_view(admin: AdminIdentity = AUTH_DEPENDENCY) -> AdminIdentity:
     async with database() as db:
         allowed = await has_permission(db, admin, "admin:view")
     if not allowed:
+        logger.info("admin_permission_rejected")
         raise HTTPException(403, "Access denied")
     return admin
 
@@ -87,6 +92,7 @@ async def require_audit(admin: AdminIdentity = AUTH_DEPENDENCY) -> AdminIdentity
     async with database() as db:
         allowed = await has_permission(db, admin, "admin:audit")
     if not allowed:
+        logger.info("admin_permission_rejected")
         raise HTTPException(403, "Access denied")
     return admin
 
@@ -95,6 +101,7 @@ async def require_manage(admin: AdminIdentity = AUTH_DEPENDENCY) -> AdminIdentit
     async with database() as db:
         allowed = await has_permission(db, admin, "admin:manage")
     if not allowed:
+        logger.info("admin_permission_rejected")
         raise HTTPException(403, "Access denied")
     return admin
 
@@ -110,6 +117,7 @@ class ServiceUpdateForm(BaseModel):
     expected_revision: StrictInt
     reason: str
     description_ar: str | None = None
+    name_ar: str | None = None
     base_price_halalas: StrictInt | None = None
     base_price_stars: StrictInt | None = None
     enabled: StrictBool | None = None
@@ -135,6 +143,7 @@ class ServiceCreateForm(BaseModel):
     base_price_halalas: StrictInt
     base_price_stars: StrictInt | None = None
     input_schema: dict[str, Any] = Field(default_factory=dict)
+    processor_key: Literal["summarize-text", "merge-pdf"] | None = None
     reason: str
 
 
@@ -152,20 +161,27 @@ async def login(request: Request, form: LoginForm, response: Response):
     ip = request.client.host if request.client else "unknown"
     settings = get_settings()
     try:
-        allowed = await login_allowed(
-            request.app.state.redis, ip, form.username,
-            source_limit=settings.admin_login_source_limit,
-            account_limit=settings.admin_login_account_limit,
-            pair_limit=settings.admin_login_pair_limit,
-            window_seconds=settings.admin_login_window_seconds,
-        )
-    except (RedisError, OSError) as exc:
-        raise HTTPException(503, "Login temporarily unavailable") from exc
+        limits = {
+            "source_limit": settings.admin_login_source_limit,
+            "account_limit": settings.admin_login_account_limit,
+            "pair_limit": settings.admin_login_pair_limit,
+            "window_seconds": settings.admin_login_window_seconds,
+        }
+        if getattr(request.app.state, "postgres_login_limits", False):
+            async with database() as db:
+                allowed = await postgres_login_allowed(db, ip, form.username, **limits)
+        else:
+            allowed = await login_allowed(request.app.state.redis, ip, form.username, **limits)
+    except (RedisError, asyncpg.PostgresError, OSError) as exc:
+        logger.warning("admin_login_limits_unavailable:%s", type(exc).__name__)
+        raise HTTPException(503, "Login temporarily unavailable") from None
     if not allowed:
+        logger.warning("admin_login_limited")
         raise HTTPException(429, "Too many attempts")
     async with database() as db:
         admin = await authenticate(db, form.username, form.password)
         if not admin:
+            logger.info("admin_login_rejected")
             raise HTTPException(401, "Invalid credentials")
         token = await create_session(db, admin)
     response.set_cookie(
@@ -274,7 +290,7 @@ async def triage_custom_request(
 async def services(_admin: AdminIdentity = VIEW_DEPENDENCY):
     async with database() as db:
         rows = await db.fetch("""SELECT s.id,s.slug,s.name_ar,s.description_ar,
-          s.base_price_halalas,s.base_price_stars,s.processor_type,s.enabled,s.revision,
+          s.base_price_halalas,s.base_price_stars,s.processor_type,s.processor_key,s.enabled,s.revision,
           c.name_ar AS category_name_ar FROM services s
           JOIN service_categories c ON c.id=s.category_id
           ORDER BY c.name_ar,s.name_ar,s.id LIMIT 200""")
@@ -299,8 +315,10 @@ async def register_category(request: Request, form: CategoryCreateForm,
                 db, admin.id, slug=form.slug, name_ar=form.name_ar, reason=form.reason,
             )
         except ServiceRevisionConflict as exc:
+            logger.info("admin_category_change_rejected:%s", type(exc).__name__)
             raise HTTPException(409, str(exc)) from exc
         except ServiceUpdateRejected as exc:
+            logger.info("admin_category_change_rejected:%s", type(exc).__name__)
             raise HTTPException(422, str(exc)) from exc
     return {"id": str(category_id)}
 
@@ -316,12 +334,16 @@ async def register_service(request: Request, form: ServiceCreateForm,
                 name_ar=form.name_ar, description_ar=form.description_ar,
                 processor_type=form.processor_type, base_price_halalas=form.base_price_halalas,
                 input_schema=form.input_schema, reason=form.reason, base_price_stars=form.base_price_stars,
+                processor_key=form.processor_key,
             )
         except ServiceNotFound as exc:
+            logger.info("admin_product_change_rejected:%s", type(exc).__name__)
             raise HTTPException(404, str(exc)) from exc
         except ServiceRevisionConflict as exc:
+            logger.info("admin_product_change_rejected:%s", type(exc).__name__)
             raise HTTPException(409, str(exc)) from exc
         except ServiceUpdateRejected as exc:
+            logger.info("admin_product_change_rejected:%s", type(exc).__name__)
             raise HTTPException(422, str(exc)) from exc
         enabled = await db.fetchval("SELECT enabled FROM services WHERE id=$1", service_id)
     return {"id": str(service_id), "enabled": enabled}
@@ -338,6 +360,7 @@ async def edit_service(request: Request, service_id: UUID, form: ServiceUpdateFo
                 expected_revision=form.expected_revision,
                 reason=form.reason,
                 description_ar=form.description_ar,
+                name_ar=form.name_ar,
                 base_price_halalas=form.base_price_halalas,
                 base_price_stars=form.base_price_stars,
                 enabled=form.enabled,
@@ -345,10 +368,13 @@ async def edit_service(request: Request, service_id: UUID, form: ServiceUpdateFo
                 allow_activation=get_settings().service_activation_enabled,
             )
         except ServiceNotFound as exc:
+            logger.info("admin_product_change_rejected:%s", type(exc).__name__)
             raise HTTPException(404, str(exc)) from exc
         except ServiceRevisionConflict as exc:
+            logger.info("admin_product_change_rejected:%s", type(exc).__name__)
             raise HTTPException(409, str(exc)) from exc
         except ServiceUpdateRejected as exc:
+            logger.info("admin_product_change_rejected:%s", type(exc).__name__)
             raise HTTPException(422, str(exc)) from exc
 
 

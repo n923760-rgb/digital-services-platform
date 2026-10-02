@@ -6,13 +6,13 @@ The owner's 2026-10-02 scope describes one text-summary service and direct execu
 
 platform_core/text_summary.py contains validation and the small Summarizer interface. LocalSummarizer chooses up to three original sentences by word frequency and retains their original order. It supports Arabic/plain text and caps results at 1,800 characters. This is not generative AI, a semantic-quality benchmark or a guarantee of a good summary. Inputs are 20–4,000 characters with letters. The provider is injected into execute_summary; an external implementation can later use the same interface after its actual need/provider selection is confirmed.
 
-platform_core/summary_orders.py owns quote, execution, result/delivery and failure state. Telegram handlers parse/private-check input and invoke it. API v0 exposes health only, not an unauthenticated summary/payment endpoint.
+platform_core/summary_orders.py owns quote, execution, result/delivery and failure state. Telegram handlers parse/private-check input and invoke it. API v0 exposes DB-only health and the authenticated administration API. It exposes no unauthenticated summary/payment endpoint. Owner-confirmed product management reuses the existing panel; [product contract](PRODUCT-CATALOG.md).
 
 ## Paid direct journey
 
-An enabled summarize-text service with an OWNER-set whole-Star price and configured terms/support is required. The bot presents the local algorithm/price/terms before requesting the accepted offer's XTR invoice. The immutable invoice binds a SHA-256 of the input alongside buyer/price/terms/revision; raw text is separate with expiry, and updates to its accepted snapshot are rejected.
+An enabled product bound to summarize-text with an OWNER-set whole-Star price and configured terms/support is required. The bot presents the local algorithm/price/terms before requesting the accepted offer's XTR invoice. The immutable invoice binds a SHA-256 of the input alongside buyer/price/terms/revision; raw text is separate with expiry, and updates to its accepted snapshot are rejected.
 
-Existing Stars owner/currency/amount/checkout/receipt/refund rules apply. The minimal entrypoint accepts checkout/fulfillment only for summarize-text. A successful receipt atomically creates one order/charge history without a jobs row, reserve or SAR conversion. QUEUED remains an existing database order-state name for accepted work; there is no dispatch queue, ARQ process or Redis dependency in this runtime.
+Existing Stars owner/currency/amount/checkout/receipt/refund rules apply. The minimal entrypoint accepts checkout/fulfillment only for products bound to the implemented summarize-text executor. A successful receipt atomically creates one order/charge history without a jobs row, reserve or SAR conversion. QUEUED remains an existing database order-state name for accepted work; there is no dispatch queue, ARQ process or Redis dependency in this runtime.
 
 The handler calls execute_summary directly. It claims one attempt atomically, invokes the provider outside database locks with a five-second bound, and persists the result/state atomically. Replay reuses the cached result. An actual successful send returns a receipt before DELIVERED/COMPLETED is recorded atomically. Concurrent refunds block completion. Provider/invalid-output failures record FAILED plus REFUND_REQUESTED atomically.
 
@@ -26,13 +26,13 @@ Exactly-once sending is not promised. Accepted send followed by a crash/DB failu
 
 ## Persistence, retention and migration
 
-Migration 0017 adds expiring inputs/results and an immutable input digest to invoices. It registers summarize-text disabled with no Stars price, preserves all SAR/PDF/Stars history, and refuses destructive downgrade. Application rollback retains the additive schema. No create_all/manual schema changes.
+Migration 0017 adds expiring inputs/results and an immutable input digest to invoices. It registers summarize-text disabled with no Stars price, preserves all SAR/PDF/Stars history, and refuses destructive downgrade. Application rollback retains the additive schema. Migration 0018 separates product identity from known executor and adds PostgreSQL admin login counters. No create_all/manual schema changes.
 
 Existing internal FILE_RETENTION_DAYS is used for text expiry (1–365 days here), not a newly approved privacy policy. Expired text cannot be checked out/executed/read as a pending result. Raw text is physically purged on startup/new quote activity; an idle process does not promise timed physical deletion. Financial invoices retain only the input hash and purchase terms. Final privacy/retention and actual recovery remain launch decisions.
 
 ## Startup and configuration
 
-Default docker-compose.yml runs PostgreSQL, its one-shot Alembic migrator and a DB-only FastAPI health adapter; the opt-in telegram profile runs apps.telegram_bot.v0. No Redis, S3, PDF parser, ARQ worker, Caddy or Next.js process is required. API binds loopback port 8100 and exposes health only. This is a source/local startup change, not a production deployment.
+Default docker-compose.yml runs PostgreSQL, its one-shot Alembic migrator and a DB-only FastAPI health adapter; the opt-in telegram profile runs apps.telegram_bot.v0. No Redis, S3, PDF parser or ARQ worker is required. Owner-requested administration optionally starts existing Next.js/Caddy using the admin profile; neither starts by default. API binds loopback port 8100 with health and authenticated admin routes. This is a source/local startup change, not a production deployment.
 
 The bot authenticates with Telegram before opening the application database or running expiry cleanup/interrupted-order recovery. Missing/malformed tokens, rejected authentication and transport failure stop startup with a sanitized classification; no order/refund state is changed. Constructed bot sessions are closed even when authentication fails. After authentication, the existing legacy-work guard still runs before recovery.
 

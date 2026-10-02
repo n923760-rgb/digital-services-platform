@@ -1,6 +1,6 @@
 # Master Engineering Roadmap
 
-Status: direct local text-summary slice; old PDF/Stars source/history retained, paid runtime qualification incomplete.
+Status: direct local summary products with owner-requested optional administration; old PDF/Stars source/history retained, paid runtime qualification incomplete.
 Owner reset: 2026-10-02. Saudi market, Arabic first/RTL, Modular Monolith; Telegram is the first channel, not the architecture.
 Historical direct-slice base: 0c402848a31d09f699675a76f6dcce84ed8babff. Retrieve live main every session.
 [Authority](../AGENTS.md) · [Scope decision](../docs/SCOPE.md) · [Reset report](REPORTS/2026-10-02-SOLO_SCOPE_RESET.md) · [Baseline](REPORTS/2026-10-01-MASTER_BASELINE.md) · [Historical review](REPORTS/2026-10-01-POST_REPAIR_REVIEW.md) · [Historical evidence](EVIDENCE/2026-10-01-QUALIFIED_CHANGES.md)
@@ -9,7 +9,7 @@ Historical direct-slice base: 0c402848a31d09f699675a76f6dcce84ed8babff. Retrieve
 
 FACT: the default entrypoint now serves direct text summarization through a small local Summarizer interface. The legacy PROCESSORS registry remains merge-pdf only; direct summaries create no jobs row. The local extractive algorithm is not generative AI. [Contract](../docs/DIRECT-SUMMARY.md).
 FACT: existing SAR wallet uses integer halalas and reservation/capture/release history. Native XTR Stars invoices/charges are separate and never convert into SAR.
-FACT: default runtime is PostgreSQL/migrator/FastAPI-health plus an opt-in direct-summary bot. Redis/ARQ/PDF/S3/Next.js stay in docker-compose.legacy.yml. Migration 0017 preserves existing history and adds input/result expiry and immutable invoice text hashes. Final source/CI proof is in the direct-slice PR body.
+FACT: selected runtime is PostgreSQL/migrator/FastAPI plus an opt-in direct-summary bot. Owner-requested optional admin profile reuses existing Next.js/Caddy with DB-backed login limits; product identity is separate from its known executor. Redis/ARQ/PDF/S3 stay in docker-compose.legacy.yml; Next.js/Caddy also support the explicitly requested optional product panel. Migration 0017 preserves existing history and adds input/result expiry and immutable invoice text hashes. Final source/CI proof is in the direct-slice PR body.
 FACT: Stars engineering integration merged in [PR #40](https://github.com/n923760-rgb/digital-services-platform/pull/40). Its qualified source 2102f41a345bf9d5e2aad6868bee24f5b88095d2, tree 2049666cddb8b5b2d05e5734dc90c8c2c8c01490 matches reset starting main 58b4721e23e4cddabadb542a79ceffc5e775aa16. Exact-source Foundation [36942691617](https://github.com/n923760-rgb/digital-services-platform/actions/runs/36942691617) passed 136 tests/python/web/Compose; advisory [36942691648](https://github.com/n923760-rgb/digital-services-platform/actions/runs/36942691648) reported Python 57/0 skips/0 known vulnerabilities and npm production 0. This is historical source/CI evidence, not live payments or a summarization V0.
 OWNER DESCRIPTION: completed V0 with text summary, simple TOP_UP/CHARGE/REFUND, direct execution and create_all. This differs from the inspected source; it is not represented as verified completion here.
 UNKNOWN: measured growth trigger, external AI provider choice, actual bot/payment/deployment and production recovery evidence. The implementation follows the owner's described text-summary/direct scope; no separate trigger answer is invented.
@@ -32,7 +32,7 @@ These changes are existing history, not a mandate to expand the reset scope or e
 
 FACT: active guidance previously required workers for work that takes time and used the Telegram bot as product identity; this conflicts with the new owner-directed scope. This reset corrects instructions/contracts without claiming runtime simplification.
 FACT: the starting source lacked the described summarizer. This continuation implements its minimal local/direct form and separates default/legacy startup, preserving financial/migration history.
-UNKNOWN: a current trigger for additional queues, UI, services or other complexity. None was supplied. Never infer confirmation from elapsed time.
+OWNER CONFIRMED: asked “هل المحفّز صار موجود فعلًا: تحتاج الآن إدارة أكثر من منتج وأسعاره من اللوحة؟ ...” and answered “نعم؛ خدمات ينفّذها البوت”. Implement the smallest current metadata/price/activation/catalog integration, not file sales or a new executor. Additional queues/providers/services remain conditional; no traffic measurements or growth trigger are invented.
 Existing live provider, storage, recovery and operator evidence gaps stay attributable, but apply to the actual selected service; optional features are not defects merely because they are missing.
 
 ## 5. Release Blocker Map
@@ -87,6 +87,7 @@ Safety/correctness rules are immediate; growth infrastructure is conditional.
 Confirmed: Saudi/Arabic-first product, one developer, Modular Monolith, Telegram as first channel, thin handlers, atomic finance, explicit classified/logged error policies, external-provider abstractions and migration-only schema changes once Alembic exists. Before new features/complexity ask whether the real trigger exists; choose the simplest viable version and flag stage jumps.
 Existing payment decision remains Telegram Stars directly per order until explicitly revised. Qualified engineering merge authority persists.
 Continuation scope: the described text-summary/direct baseline. Local extractive summarization is the implemented default; the optional local/external-provider question remains open. A growth trigger was not provided; do not invent one.
+Confirmed product increment: add drafts and later edit names/descriptions/Stars prices in the existing panel; active priced products with a known executor appear in the bot on fresh /services reads. Current executor remains local summarization; new business capabilities need their own confirmed scope. [Product contract](../docs/PRODUCT-CATALOG.md).
 Other decisions only when needed: selected provider/model, Stars prices/final terms/support and authorized disposable environment. Never request tokens in chat.
 
 ## 11. Deferred Work
@@ -97,6 +98,6 @@ Production controls apply to the selected live flow and must not be replaced by 
 
 ## 12. Exact Immediate Next Round
 
-PR #42 source qualification is complete; [preparation report](REPORTS/2026-10-02-DIRECT_SUMMARY.md) and its PR body retain the evidence. The continuation found that startup ran interrupted-order/refund recovery before Telegram authentication. Correct that bounded ordering defect, prove failed authentication leaves the database untouched, and qualify the exact repair source before merge. [Startup repair report](REPORTS/2026-10-02-SUMMARY_STARTUP_AUTH.md).
-Default startup needs no worker/Redis/S3/Next.js; legacy history and configuration stay intact. No price, retention/privacy policy, external AI provider or paid activation is selected by implementation.
+PR #42 direct-source and [PR #43](https://github.com/n923760-rgb/digital-services-platform/pull/43) startup authentication repairs are merged; this increment starts at verified main 84d31b574f8d5779c8c335c257b72cae300da0b3/tree fc8bdd676c08a1cb76a4a0d1c744276ff2459c59. Qualify the owner-confirmed product administration/catalog integration: registration/price/name edits, supported visibility, private selection, stale-price/switch consent, paid snapshots, permissions/Origin/login limits, real optional Compose/proxy and built UI. [Product task report](REPORTS/2026-10-02-PRODUCT_CATALOG.md). Final source/runs belong in its PR body.
+Default startup needs no worker/Redis/S3; the admin profile starts existing Next.js/Caddy only on request; legacy history and configuration stay intact. No price, retention/privacy policy, external AI provider or paid activation is selected by implementation.
 After source qualification, remaining dependent work is owner-set prices/final terms/support and an authorized disposable bot for actual invoice/receipt/result/refund, plus appropriate DB backup/recovery. Do not add queues/UI/services or provider frameworks without asking for their actual trigger. Never request secret values in chat.
