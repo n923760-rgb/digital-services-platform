@@ -217,3 +217,46 @@ async def test_minimal_startup_refuses_unresolved_legacy_work():
     db = SimpleNamespace(fetchval=AsyncMock(return_value=1))
     with pytest.raises(RuntimeError, match="legacy orders"):
         await require_no_legacy_work(db)
+
+
+@pytest.mark.asyncio
+async def test_typed_payment_update_runs_minimal_bot_directly_and_replays_safely(summary_db, offer, monkeypatch):
+    from datetime import UTC, datetime
+
+    from aiogram.types import Chat, Message, SuccessfulPayment, Update, User
+    from platform_core.stars_inbox import persist_payment_update
+
+    from apps.telegram_bot import v0
+
+    db = summary_db
+    user, _, invoice, charge = offer
+    settings = SimpleNamespace(
+        database_url=os.environ["DATABASE_URL"], telegram_orders_enabled=True,
+        telegram_stars_enabled=True, telegram_payment_terms=TERMS,
+        telegram_payment_support="Synthetic support",
+    )
+    monkeypatch.setattr(summary_ui, "get_settings", lambda: settings)
+    message = Message(
+        message_id=2, date=datetime.now(UTC), chat=Chat(id=user, type="private"),
+        from_user=User(id=user, is_bot=False, first_name="Synthetic"),
+        successful_payment=SuccessfulPayment(
+            currency="XTR", total_amount=24, invoice_payload=invoice.payload,
+            telegram_payment_charge_id=charge, provider_payment_charge_id="",
+        ),
+    )
+    update = Update(update_id=uuid4().int % 2**30, message=message)
+    bot = SimpleNamespace(
+        id=999, send_message=AsyncMock(return_value=SimpleNamespace(chat=SimpleNamespace(id=user), message_id=3)),
+        refund_star_payment=AsyncMock(return_value=False),
+    )
+    monkeypatch.setattr(Message, "answer", AsyncMock())
+    await persist_payment_update(db, bot.id, update)
+    await v0.receipt(message, bot)
+    await v0.receipt(message, bot)
+    assert bot.send_message.await_count == 1
+    order = await db.fetchval("SELECT order_id FROM star_charges WHERE charge_id=$1", charge)
+    assert await db.fetchval("SELECT status FROM orders WHERE id=$1", order) == "COMPLETED"
+    assert await db.fetchval("SELECT count(*) FROM jobs WHERE order_id=$1", order) == 0
+    assert await db.fetchval(
+        "SELECT status FROM telegram_payment_inbox WHERE bot_id=$1 AND update_id=$2", bot.id, update.update_id,
+    ) == "DONE"
