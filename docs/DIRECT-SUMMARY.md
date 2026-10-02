@@ -34,6 +34,8 @@ Existing internal FILE_RETENTION_DAYS is used for text expiry (1–365 days here
 
 Default docker-compose.yml runs PostgreSQL, its one-shot Alembic migrator and a DB-only FastAPI health adapter; the opt-in telegram profile runs apps.telegram_bot.v0. No Redis, S3, PDF parser, ARQ worker, Caddy or Next.js process is required. API binds loopback port 8100 and exposes health only. This is a source/local startup change, not a production deployment.
 
+The bot authenticates with Telegram before opening the application database or running expiry cleanup/interrupted-order recovery. Missing/malformed tokens, rejected authentication and transport failure stop startup with a sanitized classification; no order/refund state is changed. Constructed bot sessions are closed even when authentication fails. After authentication, the existing legacy-work guard still runs before recovery.
+
 The previous stack is preserved verbatim in docker-compose.legacy.yml, including its volume/project name. Both use the same database volume by default for continuity; do not run both bots against one token. Resolve outstanding legacy accepted/reserved orders before switching; the new bot refuses startup while they exist. Stop the old bot/worker/UI only after resolving its work. Never delete volumes or financial/migration history.
 
 Run admin_bootstrap locally to establish OWNER, then authenticate the summary_setup CLI to set the owner-selected price/reason. --activate additionally requires SERVICE_ACTIVATION_ENABLED; new checkout requires both Telegram flags and actual terms/support. No example price is a recommendation; this PR changes no production flags.

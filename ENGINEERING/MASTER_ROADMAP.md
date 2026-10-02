@@ -55,7 +55,7 @@ A queue, dashboard, S3 service or a new channel is not automatically required by
 
 Execution capabilities: repository API and existing external CI. Local shell/runtime commands NOT RUN in this reset.
 Historical Chromium evidence uses built Next.js with intercepted synthetic API. Provider calls in payment tests are fake; PostgreSQL/Compose runs use disposable data.
-No actual text-summary implementation, AI model choice/provider, direct service path or simplified deployment was qualified.
+The direct local slice was qualified and merged in [PR #42](https://github.com/n923760-rgb/digital-services-platform/pull/42): exact source c486848824cbacda33fb9662bf92b5e1a38a3ac8, tree c69d2a4199b89d3cd08fbfb29d718c818d0556b9 equals merged main 82cbcd1d46808ca4b62e7396653dc4d8ea8c9cab. [Foundation push 36965910649](https://github.com/n923760-rgb/digital-services-platform/actions/runs/36965910649) passed 154 tests, Ruff, migration 0017, legacy regressions and the isolated minimal deployment; [advisory 36965910629](https://github.com/n923760-rgb/digital-services-platform/actions/runs/36965910629) passed. Provider/Telegram calls are synthetic. External AI and real Telegram/Stars journeys remain NOT RUN.
 Actual Telegram/payment/storage and deployment remain unqualified. These facts do not authorize purchasing infrastructure or enabling paid flags.
 
 ## 7. Ordered Engineering Gates
@@ -97,6 +97,6 @@ Production controls apply to the selected live flow and must not be replaced by 
 
 ## 12. Exact Immediate Next Round
 
-Qualify the direct local text-summary slice against its exact source, full diff, legacy regressions and actual minimal Compose deployment. Final proof is in its PR body; [preparation report](REPORTS/2026-10-02-DIRECT_SUMMARY.md).
+PR #42 source qualification is complete; [preparation report](REPORTS/2026-10-02-DIRECT_SUMMARY.md) and its PR body retain the evidence. The continuation found that startup ran interrupted-order/refund recovery before Telegram authentication. Correct that bounded ordering defect, prove failed authentication leaves the database untouched, and qualify the exact repair source before merge. [Startup repair report](REPORTS/2026-10-02-SUMMARY_STARTUP_AUTH.md).
 Default startup needs no worker/Redis/S3/Next.js; legacy history and configuration stay intact. No price, retention/privacy policy, external AI provider or paid activation is selected by implementation.
 After source qualification, remaining dependent work is owner-set prices/final terms/support and an authorized disposable bot for actual invoice/receipt/result/refund, plus appropriate DB backup/recovery. Do not add queues/UI/services or provider frameworks without asking for their actual trigger. Never request secret values in chat.
