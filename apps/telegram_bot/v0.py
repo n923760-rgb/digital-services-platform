@@ -128,18 +128,25 @@ async def main():
     settings = get_settings()
     configure_logging(settings.log_level)
     if not settings.telegram_bot_token:
+        logger.error("summary_startup_token_missing")
         raise RuntimeError("TELEGRAM_BOT_TOKEN is required")
-    connection = await summary_ui.connect()
-    try:
-        await require_no_legacy_work(connection)
-        await purge_expired_summary_text(connection)
-        await recover_interrupted_summaries(connection)
-    finally:
-        await connection.close()
-    bot = Bot(token=settings.telegram_bot_token)
+    bot = None
     task = None
     try:
-        await bot.get_me()
+        try:
+            bot = Bot(token=settings.telegram_bot_token)
+            await bot.get_me()
+        except Exception as exc:
+            logger.error("summary_startup_auth_failed:%s", type(exc).__name__)
+            raise RuntimeError("Telegram bot authentication failed") from None
+        # Never change payment/order state before authenticating the configured bot.
+        connection = await summary_ui.connect()
+        try:
+            await require_no_legacy_work(connection)
+            await purge_expired_summary_text(connection)
+            await recover_interrupted_summaries(connection)
+        finally:
+            await connection.close()
         await summary_ui.billing(bot)
         task = asyncio.create_task(heartbeat())
         logger.info("summary_polling_started")
@@ -151,7 +158,8 @@ async def main():
                 await task
         with suppress(FileNotFoundError):
             os.unlink("/tmp/bot-heartbeat")
-        await bot.session.close()
+        if bot is not None:
+            await bot.session.close()
 
 
 if __name__ == "__main__":
