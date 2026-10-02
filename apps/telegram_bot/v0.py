@@ -10,6 +10,7 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command, CommandStart
 from aiogram.types import CallbackQuery, ErrorEvent, Message
+from aiogram.utils.token import TokenValidationError
 from platform_core.config import get_settings
 from platform_core.logging import configure_logging
 from platform_core.summary_orders import (
@@ -136,7 +137,7 @@ async def main():
         try:
             bot = Bot(token=settings.telegram_bot_token)
             await bot.get_me()
-        except Exception as exc:
+        except (TokenValidationError, TelegramAPIError, OSError) as exc:
             logger.error("summary_startup_auth_failed:%s", type(exc).__name__)
             raise RuntimeError("Telegram bot authentication failed") from None
         # Never change payment/order state before authenticating the configured bot.

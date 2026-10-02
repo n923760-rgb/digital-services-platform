@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from aiogram.exceptions import TelegramUnauthorizedError
 from aiogram.methods import GetMe
+from aiogram.utils.token import TokenValidationError
 
 from apps.telegram_bot import v0
 
@@ -19,7 +20,7 @@ async def test_failed_bot_authentication_never_opens_database(monkeypatch, caplo
     bot = SimpleNamespace(get_me=AsyncMock(), session=SimpleNamespace(close=AsyncMock()))
     constructor = Mock(return_value=bot)
     if failure == "malformed":
-        constructor.side_effect = ValueError("sensitive-token-validation")
+        constructor.side_effect = TokenValidationError("sensitive-token-validation")
     elif failure == "unauthorized":
         bot.get_me.side_effect = TelegramUnauthorizedError(
             method=GetMe(), message="sensitive-provider-response",
