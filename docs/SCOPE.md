@@ -21,9 +21,9 @@ A queue/worker, Redis/ARQ, Next.js, a full dashboard, microservices or a provide
 | Operations UI | Add only on demand | Existing Next.js admin and authenticated OWNER/OPERATOR operations |
 | Payments | Existing owner selection must be reconciled | Telegram Stars directly per order, gated off; no Stars-to-SAR conversion |
 
-The reported V0 completion is not source verification. Do not claim that text summarization, direct execution or a simplified wallet is already implemented here. Two decisions were requested: the one service to retain/build, and whether an actual background-execution trigger exists. No answer is inferred from elapsed time.
+The reported V0 completion is not source verification. Do not claim that text summarization, direct execution or a simplified wallet is already implemented here. The later “كمل” continues the owner's described text-summary/direct baseline. The implementation follows that scope without claiming a separately answered service question or a measured background trigger. The default is local extractive summarization; the optional external-provider question remains open. See [direct slice](DIRECT-SUMMARY.md).
 
-Existing source and financial/migration history stay attributable. Simplification is a bounded source change after those answers, not deletion of historical tables/ledgers or a second create_all bootstrap. Keep the prior Stars/direct-per-order decision until the owner explicitly changes it; do not fund an internal wallet with Stars.
+Existing source and financial/migration history stay attributable. The direct slice changes default entrypoints/Compose while preserving old source, tables/ledgers and Alembic history. It does not introduce another create_all bootstrap. Keep the prior Stars/direct-per-order decision until the owner explicitly changes it; do not fund an internal wallet with Stars.
 
 ## Permanent implementation rules
 
@@ -37,6 +37,6 @@ External AI/storage/payment calls use a small adapter/callable. Avoid unnecessar
 
 ## Application of this decision
 
-This reset changes engineering scope and removes automatic complexity from active guidance. It does not establish a new runtime, feature implementation or launch. Existing startup/CI still exercise the current PDF/Stars stack until a separately reviewed simplification changes it. Existing source qualification is historical proof for its exact source; it does not prove an unimplemented summarization service or a real payment.
+The policy reset merged in PR #41; the direct slice implements the selected small runtime in its contract. Default startup uses DB/migrator/API plus the opt-in text bot. CI retains historical PDF/Stars tests and adds direct/minimal-runtime proof. Neither round establishes a live launch. Existing source qualification is historical proof for its exact source; it does not prove an unimplemented summarization service or a real payment.
 
 Do not convert an existing deployment requirement into a growth requirement. Select future validation and launch prerequisites from the actual chosen service. Paid activation/deployment, production migrations and destructive operations still require their scoped authority.

@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 import asyncpg
 
 from platform_core.processors import PROCESSORS
+from platform_core.text_summary import SLUG, TEXT_INPUT_SCHEMA
 
 
 class ServiceNotFound(ValueError):
@@ -86,6 +87,8 @@ async def create_service(
         raise ServiceUpdateRejected("invalid input schema") from exc
     if len(schema_json.encode("utf-8")) > 4000:
         raise ServiceUpdateRejected("input schema too large")
+    if slug == SLUG and (processor_type != "tool" or input_schema != TEXT_INPUT_SCHEMA):
+        raise ServiceUpdateRejected("summarize-text needs its supported text schema")
     if slug == "merge-pdf" and (processor_type != "tool" or input_schema != PDF_INPUT_SCHEMA):
         raise ServiceUpdateRejected("merge-pdf needs its supported PDF schema")
 
@@ -177,8 +180,10 @@ async def update_service(
             safe_pdf_schema = (isinstance(schema, dict) and schema.get("min_files") == 2
                                and schema.get("max_files") == 10
                                and schema.get("file_mime") == "application/pdf")
+            supported = ((row["slug"] in PROCESSORS and safe_pdf_schema)
+                         or (row["slug"] == SLUG and schema == TEXT_INPUT_SCHEMA))
             if not (allow_activation and row["category_enabled"] and row["processor_type"] == "tool"
-                    and row["slug"] in PROCESSORS and safe_pdf_schema):
+                    and supported):
                 raise ServiceUpdateRejected("service activation is unavailable")
 
         revision = row["revision"] + 1

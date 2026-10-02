@@ -22,7 +22,7 @@ For another project: use the central [Universal Project Start Prompt](https://gi
 [financial/order core](docs/CORE-001.md), [payments](docs/PAYMENTS.md),
 [files](docs/FILES.md), [registry](docs/SERVICE-REGISTRY.md),
 [custom requests](docs/CUSTOM-REQUESTS.md), [recovery](docs/BACKUP-RECOVERY.md).
-The current architecture contract separates the intended small baseline from existing source and historical foundation acceptance. A reported text-summary V0 is not present in this verified tree; service/execution selection is pending the owner response. Existing Alembic history remains authoritative.
+The current architecture contract separates the intended small baseline from existing source and historical foundation acceptance. The continuation implements the described direct text-summary slice with a local provider interface; [contract](docs/DIRECT-SUMMARY.md). Old infrastructure remains in docker-compose.legacy.yml, default Compose is minimal. No generative AI or live paid launch is inferred. Existing Alembic history remains authoritative.
 
 Application owners: packages/python/platform_core/. Adapters: apps/api/, apps/telegram_bot/, apps/web/.
 Schema: migrations/. Build/dependencies: pyproject.toml, apps/web/package.json, Dockerfiles and docker-compose.yml.

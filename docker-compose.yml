@@ -13,30 +13,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-  redis:
-    image: redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
-    restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
-    volumes: [redis_data:/data]
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-  object-storage:
-    # Development and CI only. Use a real S3 provider for production data.
-    image: adobe/s3mock:5.2.2@sha256:e7c36014dcf4c7f0f6bec9de888477d1d9b8f55eceb7d9c1186f70d7aadf81ca
-    restart: unless-stopped
-    environment:
-      COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: ${OBJECT_STORAGE_BUCKET:?Set bucket}
-      COM_ADOBE_TESTING_S3MOCK_STORE_ROOT: /s3mockroot
-      COM_ADOBE_TESTING_S3MOCK_STORE_RETAIN_FILES_ON_EXIT: "true"
-    volumes: [object_data:/s3mockroot]
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/favicon.ico"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
   migrate:
     build: {context: ., dockerfile: Dockerfile.python}
     command: ["alembic", "upgrade", "head"]
@@ -44,117 +20,23 @@ services:
     restart: "no"
     depends_on:
       db: {condition: service_healthy}
-  backup-init:
-    image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
-    user: "0:0"
-    network_mode: none
-    command: ["sh", "-c", "chown 10001:10001 /backups /backup-status && chmod 700 /backups /backup-status"]
-    volumes:
-      - backup_data:/backups
-      - backup_status:/backup-status
-    restart: "no"
-  backup:
-    image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
-    user: "10001:10001"
-    read_only: true
-    cap_drop: [ALL]
-    security_opt: ["no-new-privileges:true"]
-    restart: unless-stopped
-    environment:
-      PGHOST: db
-      PGPORT: "5432"
-      PGDATABASE: ${POSTGRES_DB:?Set POSTGRES_DB}
-      PGUSER: ${POSTGRES_USER:?Set POSTGRES_USER}
-      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
-      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
-      BACKUP_DIR: /backups
-      BACKUP_STATUS_DIR: /backup-status
-    command: ["sh", "/backup-scripts/backup_loop.sh"]
-    volumes:
-      - backup_data:/backups
-      - backup_status:/backup-status
-      - ./infrastructure/backup:/backup-scripts:ro
-    depends_on:
-      backup-init: {condition: service_completed_successfully}
-      migrate: {condition: service_completed_successfully}
-    healthcheck:
-      test: ["CMD", "sh", "/backup-scripts/check_freshness.sh"]
-      interval: 1m
-      timeout: 5s
-      retries: 3
-      start_period: 2m
   api:
-    networks:
-      default: {}
-      admin_proxy:
-        aliases: [api-proxy]
-        ipv4_address: ${API_PROXY_IP:-172.30.0.3}
     build: {context: ., dockerfile: Dockerfile.python}
-    command: ["uvicorn", "apps.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "${TRUSTED_PROXY_IP:-172.30.0.2},127.0.0.1"]
+    command: ["uvicorn", "apps.api.v0:app", "--host", "0.0.0.0", "--port", "8000"]
     env_file: .env
-    environment:
-      BACKUP_STATUS_PATH: /backup-status/latest
-    volumes:
-      - backup_status:/backup-status:ro
+    ports: ["127.0.0.1:8100:8000"]
     restart: unless-stopped
     depends_on:
       migrate: {condition: service_completed_successfully}
-      redis: {condition: service_healthy}
-      object-storage: {condition: service_healthy}
     healthcheck:
       test: ["CMD", "python", "-m", "platform_core.healthcheck", "http://127.0.0.1:8000/api/health/ready"]
       interval: 15s
       timeout: 5s
       retries: 5
-  pdf-sandbox-init:
-    build: {context: ., dockerfile: Dockerfile.pdf-sandbox}
-    user: "0:0"
-    network_mode: none
-    command: ["sh", "-c", "chown 10001:10001 /sandbox-jobs && chmod 700 /sandbox-jobs"]
-    volumes: [pdf_jobs:/sandbox-jobs]
-    restart: "no"
-  pdf-sandbox:
-    build: {context: ., dockerfile: Dockerfile.pdf-sandbox}
-    network_mode: none
-    read_only: true
-    cap_drop: [ALL]
-    security_opt: ["no-new-privileges:true"]
-    pids_limit: 32
-    mem_limit: 1g
-    tmpfs:
-      - /tmp:size=134217728,mode=1777
-    volumes: [pdf_jobs:/sandbox-jobs]
-    restart: unless-stopped
-    depends_on:
-      pdf-sandbox-init: {condition: service_completed_successfully}
-    healthcheck:
-      test: ["CMD", "python", "-c", "import os,time; exit(0 if time.time()-os.stat('/tmp/pdf-sandbox-heartbeat').st_mtime<10 else 1)"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-  worker:
-    build: {context: ., dockerfile: Dockerfile.python}
-    command: ["arq", "platform_core.worker.WorkerSettings"]
-    env_file: .env
-    environment:
-      PDF_SANDBOX_ROOT: /sandbox-jobs
-    volumes: [pdf_jobs:/sandbox-jobs]
-    tmpfs:
-      - /tmp:size=268435456,mode=1777
-    restart: unless-stopped
-    depends_on:
-      redis: {condition: service_healthy}
-      migrate: {condition: service_completed_successfully}
-      pdf-sandbox: {condition: service_healthy}
-    healthcheck:
-      test: ["CMD", "arq", "--check", "platform_core.worker.WorkerSettings"]
-      interval: 20s
-      timeout: 5s
-      retries: 5
   telegram-bot:
     profiles: [telegram]
     build: {context: ., dockerfile: Dockerfile.python}
-    command: ["python", "-m", "apps.telegram_bot.main"]
+    command: ["python", "-m", "apps.telegram_bot.v0"]
     env_file: .env
     restart: unless-stopped
     depends_on:
@@ -164,44 +46,5 @@ services:
       interval: 20s
       timeout: 5s
       retries: 5
-  web:
-    build: {context: ./apps/web}
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/web-health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-  caddy:
-    networks:
-      default: {}
-      admin_proxy:
-        ipv4_address: ${TRUSTED_PROXY_IP:-172.30.0.2}
-    image: caddy:2-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b
-    restart: unless-stopped
-    ports: ["80:80", "443:443"]
-    environment:
-      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
-    volumes:
-      - ./infrastructure/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      api: {condition: service_healthy}
-      web: {condition: service_healthy}
 volumes:
   postgres_data:
-  redis_data:
-  object_data:
-  caddy_data:
-  caddy_config:
-  pdf_jobs:
-  backup_data:
-  backup_status:
-
-networks:
-  admin_proxy:
-    internal: true
-    ipam:
-      config:
-        - subnet: ${PROXY_NETWORK_SUBNET:-172.30.0.0/29}
