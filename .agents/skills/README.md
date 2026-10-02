@@ -2,7 +2,7 @@
 
 These are local engineering instructions discoverable under .agents/skills/<name>/SKILL.md.
 They do not install external plugins, run tests automatically, grant protected-action permission, or provide unavailable tools.
-AGENTS.md owns project policy. Use only the relevant skill after reading its SKILL.md.
+AGENTS.md owns project policy. Use only the relevant skill after reading its SKILL.md. All skills follow the [solo-developer scope](../../docs/SCOPE.md): before any new feature/complexity ask the owner whether the actual trigger exists. A skill's checklist does not mandate queues, Redis/ARQ, Next.js, a full dashboard or broad qualification unrelated to the selected service. Apply permanent correctness rules from V0; use the smallest applicable method.
 
 | Skill | Use |
 | --- | --- |

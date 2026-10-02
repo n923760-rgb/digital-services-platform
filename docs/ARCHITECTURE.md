@@ -1,21 +1,27 @@
-# Architecture contract — v1 foundation
+# Architecture contract — Modular Monolith
 
-This repository implements the `APPROVED FOUNDATION` v1.0 specification. The final brand, domain, payment provider, AI models, S3 provider and prices remain open decisions and belong in configuration or adapters. Changes to locked decisions require a recorded architecture decision.
+Owner reset scope on 2026-10-02 for one developer and a Saudi/Arabic-first product. [Scope decision](SCOPE.md) supersedes the former assumption that time-consuming work must always use ARQ. The older FOUNDATION/V1 specification is historical context, not permission to introduce complexity.
 
-## Current product direction and milestone scope
+## Target boundaries
 
-The owner confirmed that this product serves customers through a Telegram bot. Next.js is the existing operations/admin interface. The FOUNDATION-001 acceptance text below records the historical foundation milestone; later CORE-001 source adds financial tables, PDF workflows, service administration and custom-request review. Use live source, README, subsystem contracts and ENGINEERING/MASTER_ROADMAP.md for current capability; do not treat the foundation milestone as a current assertion that those features are absent.
+Python/FastAPI + aiogram + PostgreSQL form the small baseline. Telegram is the first transport channel; HTTP and any later channel invoke the same application/domain modules in platform_core. Keep handlers thin. All related financial database writes are atomic; external providers use small adapters; failures have classifications, sanitized logs and stated policies. Alembic has already been introduced, so all future schema changes use migrations.
 
-## Boundaries
+Prefer a direct service call for a small workload. Add background execution, Redis/ARQ, Next.js, full operations tooling or other infrastructure only after asking the owner whether its trigger actually exists. A single provider can use one function/interface. Do not add a speculative framework or a microservice.
 
-Telegram and HTTP are transport adapters. New customer channels may invoke application services but must never own the service registry, orders, jobs, pricing, wallet or templates. Domain transitions and financial ledger transactions will be implemented in `packages/python/platform_core` (or additional domain packages) in CORE-001. External AI, payment, file and notification providers require adapters. Work that takes time executes in ARQ workers. PostgreSQL holds metadata; S3-compatible storage holds customer files. The Digital Store remains independent and can only be linked to.
+## Current source, not the target minimum
 
-## FOUNDATION-001 acceptance
+The current repository implements PDF merge, SAR reservation/settlement history, native direct-per-order Stars, persisted Telegram workflows, ARQ workers, S3 file handling/PDF isolation and Next.js administration. It has no registered text-summary processor or AI summarization adapter. A reported completed V0 must not be substituted for these source facts.
+
+Changing the selected service and runtime awaits the owner answers recorded in [the roadmap](../ENGINEERING/MASTER_ROADMAP.md). Existing infrastructure is retained during this policy reset; its presence does not prove demand or justify expansion. PDF isolation, durable financial receipts and existing data must be assessed before any removal. The Digital Store remains independent.
+
+Existing readiness probes, Compose startup and CI still cover the current stack. They do not represent a new requirement that every small service use Redis, S3, workers or Next.js. Validate the actually selected slice; never describe a future direct-execution path as implemented.
+
+## Historical FOUNDATION-001 acceptance (superseded source snapshot)
 
 This milestone delivers the runnable processes, Compose dependencies, Caddy routes, baseline migration, structured logging, health endpoints, and CI. The Alembic revision is intentionally empty: adding speculative business tables before their invariants and transactions are implemented would create a misleading financial schema. No service fulfillment, wallet balances, orders, payment endpoints or customer uploads are active. The visible web page is a placeholder, not an admin dashboard.
 
 API liveness: `GET /api/health/live`. API readiness: `GET /api/health/ready` probes PostgreSQL, Redis and the configured S3 bucket via a signed `HeadBucket` request. Next.js: `GET /web-health`. ARQ's health key monitors worker operation; the Telegram profile uses a fresh heartbeat after a successful bot API connection. Caddy routes `/api/*` to FastAPI and all other paths to Next.js. The bundled S3Mock is for development/CI and is never a production data store.
 
-## CORE-001 prerequisites
+## Historical CORE-001 prerequisites (not a new-work mandate)
 
 Implement an immutable wallet ledger with reservation uniqueness, order price snapshots and explicit state transitions, job attempts with retry exhaustion, S3 file validation and quality checks, and delivery events. Only then enable a paid Telegram service and the corresponding authenticated admin view. Integrate payment top-ups separately after webhook signature and idempotency tests. Do not mistake the foundation-stage `/start` response for an order flow.
