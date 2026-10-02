@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 from platform_core.ledger import _lock_wallet
 from platform_core.orders import ensure_telegram_user
 from platform_core.stars_payments import mark_star_delivery, request_star_refund
+from platform_core.telegram_workflow import cancel_active
 from platform_core.text_summary import (
     SLUG,
     TEXT_INPUT_SCHEMA,
@@ -201,3 +202,10 @@ async def purge_expired_summary_text(connection):
     async with connection.transaction():
         await connection.execute("DELETE FROM summary_results WHERE retention_until<=now()")
         await connection.execute("DELETE FROM summary_inputs WHERE retention_until<=now()")
+
+
+async def cancel_summary_offer(connection, telegram_user_id):
+    user_id = await connection.fetchval(
+        "SELECT id FROM users WHERE telegram_user_id=$1", telegram_user_id,
+    )
+    return await cancel_active(connection, user_id) if user_id else False

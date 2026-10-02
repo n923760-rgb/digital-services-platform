@@ -13,11 +13,11 @@ from aiogram.types import CallbackQuery, ErrorEvent, Message
 from platform_core.config import get_settings
 from platform_core.logging import configure_logging
 from platform_core.summary_orders import (
+    cancel_summary_offer,
     purge_expired_summary_text,
     recover_interrupted_summaries,
     require_no_legacy_work,
 )
-from platform_core.telegram_workflow import cancel_active
 from platform_core.text_summary import SLUG
 
 from apps.telegram_bot import customer_status, stars_payments, summary_ui
@@ -83,8 +83,7 @@ async def cancel(message: Message):
     if private(message):
         connection = await summary_ui.connect()
         try:
-            user_id = await connection.fetchval("SELECT id FROM users WHERE telegram_user_id=$1", message.from_user.id)
-            changed = await cancel_active(connection, user_id) if user_id else False
+            changed = await cancel_summary_offer(connection, message.from_user.id)
         finally:
             await connection.close()
         await message.answer("ألغي العرض غير المدفوع." if changed else "لا يوجد عرض غير مدفوع للإلغاء.")
