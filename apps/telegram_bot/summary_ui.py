@@ -122,6 +122,7 @@ async def select_product(callback):
     if (not isinstance(callback.message, Message) or callback.message.chat.type != "private"
             or callback.message.chat.id != callback.from_user.id or callback.from_user.is_bot
             or not checkout_enabled(get_settings())):
+        logger.info("summary_product_selection_rejected")
         await callback.answer("الخدمة غير متاحة.", show_alert=True)
         return
     try:

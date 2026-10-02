@@ -329,17 +329,17 @@ export default function AdminPage() {
         </details>
         <details style={{ marginBottom: 16 }}><summary style={{ cursor: "pointer" }}>تسجيل خدمة جديدة (معطّلة افتراضيًا)</summary>
           <form onSubmit={event => void addService(event)} style={{ display: "grid", gap: 10, maxWidth: 500, marginTop: 12 }}>
-            <label>التصنيف<br /><select name="category_id" required defaultValue="">
+            <div><label htmlFor="new-product-category">التصنيف</label><br /><select id="new-product-category" name="category_id" required defaultValue="">
               <option value="" disabled>اختر التصنيف</option>
               {categories.filter(category => category.enabled).map(category => <option key={category.id} value={category.id}>{category.name_ar}</option>)}
-            </select></label>
+            </select></div>
             <label>اسم الخدمة<br /><input name="name_ar" required minLength={2} maxLength={120} /></label>
             <label>الاسم المختصر بالإنجليزية<br /><input name="slug" required pattern="[a-z0-9]+(-[a-z0-9]+)*" maxLength={60} dir="ltr" /></label>
             <label>الوصف<br /><textarea name="description_ar" maxLength={1000} rows={3} /></label>
-            <label>طريقة التنفيذ<br /><select name="processor_key" value={newExecutor} onChange={event => setNewExecutor(event.target.value)}>
+            <div><label htmlFor="new-product-executor">طريقة التنفيذ</label><br /><select id="new-product-executor" name="processor_key" value={newExecutor} onChange={event => setNewExecutor(event.target.value)}>
               <option value="summarize-text">تلخيص نص محلي</option>
               <option value="">مسودة — التنفيذ غير جاهز</option>
-            </select></label>
+            </select></div>
             <small>{newExecutor ? "يختار جملًا من النص؛ ليس ذكاء اصطناعيًا توليديًا. الحد 4,000 حرف." : "تُحفظ الخدمة فقط، ولا تظهر للشراء حتى تجهيز طريقة تنفيذها."}</small>
             <label>السعر بالنجوم<br /><input name="stars" inputMode="numeric" placeholder="غير محدد" /></label>
             <label>سبب الإضافة<br /><input name="reason" required minLength={10} maxLength={500} /></label>

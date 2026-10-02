@@ -315,8 +315,10 @@ async def register_category(request: Request, form: CategoryCreateForm,
                 db, admin.id, slug=form.slug, name_ar=form.name_ar, reason=form.reason,
             )
         except ServiceRevisionConflict as exc:
+            logger.info("admin_category_change_rejected:%s", type(exc).__name__)
             raise HTTPException(409, str(exc)) from exc
         except ServiceUpdateRejected as exc:
+            logger.info("admin_category_change_rejected:%s", type(exc).__name__)
             raise HTTPException(422, str(exc)) from exc
     return {"id": str(category_id)}
 

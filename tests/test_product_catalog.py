@@ -153,7 +153,7 @@ async def test_invoice_cannot_rebind_to_another_same_price_product(products):
 
 
 @pytest.mark.asyncio
-async def test_minimal_admin_product_routes_enforce_role_origin_revision_and_activation(products):
+async def test_minimal_admin_product_routes_enforce_role_origin_revision_and_activation(products, caplog):
     db, _owner, category, _ids = products
     password = "synthetic http product test password"
     names = ["owner-" + uuid4().hex, "operator-" + uuid4().hex]
@@ -174,7 +174,10 @@ async def test_minimal_admin_product_routes_enforce_role_origin_revision_and_act
         assert (await client.post("/api/admin/services", json=data, headers=headers)).status_code == 403
         client.cookies.set(admin_api.COOKIE_NAME, tokens[0])
         assert (await client.post("/api/admin/services", json=data, headers={"Origin": "https://evil.test"})).status_code == 403
-        assert (await client.post("/api/admin/services", json={**data, "processor_key": "arbitrary-code"}, headers=headers)).status_code == 422
+        with caplog.at_level("INFO", logger="apps.api.v0"):
+            invalid = await client.post("/api/admin/services", json={**data, "processor_key": "arbitrary-code"}, headers=headers)
+        assert invalid.status_code == 422 and invalid.json() == {"detail": "Invalid input"}
+        assert "direct_api_invalid_input" in caplog.text and "arbitrary-code" not in caplog.text
         result = await client.post("/api/admin/services", json=data, headers=headers)
         assert result.status_code == 200 and result.json()["enabled"] is False
         service = UUID(result.json()["id"])

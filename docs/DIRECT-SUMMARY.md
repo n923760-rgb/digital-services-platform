@@ -32,7 +32,7 @@ Existing internal FILE_RETENTION_DAYS is used for text expiry (1–365 days here
 
 ## Startup and configuration
 
-Default docker-compose.yml runs PostgreSQL, its one-shot Alembic migrator and a DB-only FastAPI health adapter; the opt-in telegram profile runs apps.telegram_bot.v0. No Redis, S3, PDF parser or ARQ worker is required. Owner-requested administration optionally starts existing Next.js/Caddy using the admin profile; neither starts by default. API binds loopback port 8100 and exposes health only. This is a source/local startup change, not a production deployment.
+Default docker-compose.yml runs PostgreSQL, its one-shot Alembic migrator and a DB-only FastAPI health adapter; the opt-in telegram profile runs apps.telegram_bot.v0. No Redis, S3, PDF parser or ARQ worker is required. Owner-requested administration optionally starts existing Next.js/Caddy using the admin profile; neither starts by default. API binds loopback port 8100 with health and authenticated admin routes. This is a source/local startup change, not a production deployment.
 
 The bot authenticates with Telegram before opening the application database or running expiry cleanup/interrupted-order recovery. Missing/malformed tokens, rejected authentication and transport failure stop startup with a sanitized classification; no order/refund state is changed. Constructed bot sessions are closed even when authentication fails. After authentication, the existing legacy-work guard still runs before recovery.
 

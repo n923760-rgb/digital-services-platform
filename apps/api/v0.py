@@ -4,6 +4,7 @@ import logging
 
 import asyncpg
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from platform_core.config import get_settings
 from platform_core.logging import configure_logging
@@ -26,6 +27,12 @@ async def safe_failure_boundary(request: Request, call_next):
         # Suppress provider/customer bodies while preserving classified failure reporting.
         logger.exception("direct_api_request_failed:%s", type(exc).__name__, exc_info=False)
         return JSONResponse({"detail": "Internal error"}, status_code=500)
+
+
+@app.exception_handler(RequestValidationError)
+async def invalid_input(request: Request, exc: RequestValidationError):
+    logger.info("direct_api_invalid_input")
+    return JSONResponse({"detail": "Invalid input"}, status_code=422)
 
 
 @app.get("/api/health/live")
