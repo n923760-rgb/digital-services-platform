@@ -1,12 +1,15 @@
 """Persist only payment fields before polling acknowledges updates; retry from PostgreSQL."""
 
 import json
+import logging
 
 from platform_core.stars_payments import (
     StarsMismatch,
     accept_star_payment,
     confirm_star_refund,
 )
+
+logger = logging.getLogger(__name__)
 
 
 async def persist_payment_update(connection, bot_id, update):
@@ -33,7 +36,9 @@ async def persist_payment_update(connection, bot_id, update):
     )
 
 
-async def process_payment_inbox(connection, bot_id, *, allow_fulfillment) -> int:
+async def process_payment_inbox(
+    connection, bot_id, *, allow_fulfillment, service_slug: str | None = None,
+) -> int:
     processed = 0
     # One row/transaction avoids rolling back earlier receipts when a later event fails.
     for _ in range(20):
@@ -57,8 +62,11 @@ async def process_payment_inbox(connection, bot_id, *, allow_fulfillment) -> int
                     if event["kind"] == "REFUNDED":
                         await confirm_star_refund(*args)
                     else:
-                        await accept_star_payment(*args, allow_fulfillment=allow_fulfillment)
+                        await accept_star_payment(
+                            *args, allow_fulfillment=allow_fulfillment, service_slug=service_slug,
+                        )
             except StarsMismatch:
+                logger.warning("star_receipt_rejected")
                 await connection.execute(
                     """UPDATE telegram_payment_inbox SET status='REJECTED',attempted_at=now()
                        WHERE bot_id=$1 AND update_id=$2""", bot_id, row["update_id"],

@@ -1,29 +1,36 @@
 # Digital Services Platform
 
-Saudi digital services platform for one developer, Arabic first/RTL, built as a Modular Monolith. Business operations are not enabled yet. The repository currently contains the gated [PDF merge and financial workflow](docs/CORE-001.md); the owner's requested small baseline and source differences are recorded in [scope](docs/SCOPE.md).
+Saudi digital services platform for one developer, Arabic first/RTL, built as a Modular Monolith. Business operations are not enabled yet. The default runtime implements one gated [direct text-summary slice](docs/DIRECT-SUMMARY.md). Existing PDF/financial history is retained in the legacy configuration; [scope](docs/SCOPE.md) records the reset.
 
 ## Product direction
 
 **Telegram is the first customer channel**. The architecture is Python/FastAPI + aiogram + PostgreSQL with domain modules in `platform_core`. Prefer one service and direct execution until an actual owner-confirmed trigger justifies another feature or infrastructure. Keep handlers thin, financial writes atomic, failures classified/logged with an explicit policy, external providers behind simple adapters, and schema changes migration-only now that Alembic exists.
 
-Redis/ARQ, S3/PDF isolation and Next.js already exist in this source. The commands below run that existing deployment, not a simplified text-summary V0. Their presence does not make them requirements for future small services. Service selection and removal/replacement of runtime dependencies await the owner's service/trigger answer; see [architecture](docs/ARCHITECTURE.md).
+The default service is a local text summarizer with direct execution and Stars invoices. Customer copy explains that it selects original sentences rather than using generative AI. Its small Summarizer interface supports a later owner-selected provider. No growth trigger was supplied; Redis/ARQ, S3/PDF isolation and Next.js stay in legacy source/configuration and do not run by default. See [direct summary](docs/DIRECT-SUMMARY.md).
 
 Repository engineering rules and the central reusable reference are linked from [AGENTS.md](AGENTS.md) and [PROJECT-SOURCES.md](PROJECT-SOURCES.md); follow the one [engineering roadmap](ENGINEERING/MASTER_ROADMAP.md) for current qualification and remaining work.
 
-## Local startup
+## Minimal local startup
 
-Requirements: Docker with Compose V2. Port 80 must be available.
+Requirements: Docker with Compose V2. Loopback port 8100 must be available. Paid operations stay gated off.
 
 ```bash
 cp .env.example .env
-docker compose up -d --build --wait db redis object-storage migrate backup api worker web caddy
-curl --fail http://localhost/api/health/ready
-curl --fail http://localhost/web-health
+docker compose up -d --build --wait db migrate api
+curl --fail http://127.0.0.1:8100/api/health/ready
 ```
 
-Check `docker compose ps` and `docker compose logs api worker` for service status. The database migration runs to completion before the API starts. The local S3 test bucket is initialized automatically.
+Check `docker compose ps` and `docker compose logs api`. Alembic completes before API startup; no Redis, worker, storage emulator or web UI is started.
 
-For Telegram, set a valid `TELEGRAM_BOT_TOKEN` in `.env`, then run `docker compose --profile telegram up -d --build telegram-bot`. `/start` responds with a clear foundation-stage message; no paid orders are accepted yet. Keep the bot token secret. To avoid webhook/polling conflicts, only one bot instance should poll a token.
+For Telegram, set a valid `TELEGRAM_BOT_TOKEN` in the secret store/untracked `.env`, then use `docker compose --profile telegram up -d --build telegram-bot`. The default entrypoint is `apps.telegram_bot.v0`: /summary, /orders, /cancel, /terms and /paysupport. Checkout stays off without qualified configuration; do not start two pollers for one token.
+
+Initialize an OWNER through `docker compose exec -it api python -m platform_core.admin_bootstrap`. Configure the owner-selected price using `python -m platform_core.summary_setup --price-stars <owner-value> --reason '<reason>'` inside the API container. Credentials are entered interactively. `--activate` also requires SERVICE_ACTIVATION_ENABLED; checkout requires both Telegram flags and actual terms/support. This change selects no live price or launch configuration.
+
+Before switching an existing stack, resolve outstanding legacy orders, then stop its bot/worker/API/web/Caddy with `docker compose -f docker-compose.legacy.yml stop telegram-bot worker api web caddy`. The new bot refuses startup with outstanding legacy work. Project/database-volume names are preserved; never remove volumes to simplify architecture.
+
+## Preserved legacy stack
+
+PDF/admin/storage instructions below apply to `docker-compose.legacy.yml`. Set `COMPOSE_FILE=docker-compose.legacy.yml` or add `-f docker-compose.legacy.yml` for those commands. The old stack remains available for continuity/recovery and does not run by default.
 
 The PDF merge conversation is persisted in PostgreSQL but remains **off by default** (`TELEGRAM_ORDERS_ENABLED=false`). The flag alone does not make a production service safe: an enabled registry entry, configured Stars prices/terms/support and qualified real payments/refunds, full document safety checks and operational controls are still required. The Compose deployment now includes a no-network PDF processor container with a private shared volume and resource limits. Never enable public uploads against the bundled development S3 emulator.
 

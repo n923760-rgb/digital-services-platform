@@ -1,24 +1,24 @@
 # Master Engineering Roadmap
 
-Status: scope reset for one developer; existing PDF/Stars source retained, target service/execution decision pending.
+Status: direct local text-summary slice; old PDF/Stars source/history retained, paid runtime qualification incomplete.
 Owner reset: 2026-10-02. Saudi market, Arabic first/RTL, Modular Monolith; Telegram is the first channel, not the architecture.
-Historical reset inspection source: 58b4721e23e4cddabadb542a79ceffc5e775aa16. Retrieve live main every session.
+Historical direct-slice base: 0c402848a31d09f699675a76f6dcce84ed8babff. Retrieve live main every session.
 [Authority](../AGENTS.md) · [Scope decision](../docs/SCOPE.md) · [Reset report](REPORTS/2026-10-02-SOLO_SCOPE_RESET.md) · [Baseline](REPORTS/2026-10-01-MASTER_BASELINE.md) · [Historical review](REPORTS/2026-10-01-POST_REPAIR_REVIEW.md) · [Historical evidence](EVIDENCE/2026-10-01-QUALIFIED_CHANGES.md)
 
 ## 1. Current Verified State
 
-FACT: source contains one registered tool processor, merge-pdf; Telegram text submission is service-review intake, not a working summarizer. No AI summarization provider/processor is registered.
+FACT: the default entrypoint now serves direct text summarization through a small local Summarizer interface. The legacy PROCESSORS registry remains merge-pdf only; direct summaries create no jobs row. The local extractive algorithm is not generative AI. [Contract](../docs/DIRECT-SUMMARY.md).
 FACT: existing SAR wallet uses integer halalas and reservation/capture/release history. Native XTR Stars invoices/charges are separate and never convert into SAR.
-FACT: current execution uses durable PostgreSQL jobs/delivery with Redis/ARQ, an isolated PDF parser, S3 adapter and an existing Next.js operations UI. Alembic is already adopted through 0016.
+FACT: default runtime is PostgreSQL/migrator/FastAPI-health plus an opt-in direct-summary bot. Redis/ARQ/PDF/S3/Next.js stay in docker-compose.legacy.yml. Migration 0017 preserves existing history and adds input/result expiry and immutable invoice text hashes. Final source/CI proof is in the direct-slice PR body.
 FACT: Stars engineering integration merged in [PR #40](https://github.com/n923760-rgb/digital-services-platform/pull/40). Its qualified source 2102f41a345bf9d5e2aad6868bee24f5b88095d2, tree 2049666cddb8b5b2d05e5734dc90c8c2c8c01490 matches reset starting main 58b4721e23e4cddabadb542a79ceffc5e775aa16. Exact-source Foundation [36942691617](https://github.com/n923760-rgb/digital-services-platform/actions/runs/36942691617) passed 136 tests/python/web/Compose; advisory [36942691648](https://github.com/n923760-rgb/digital-services-platform/actions/runs/36942691648) reported Python 57/0 skips/0 known vulnerabilities and npm production 0. This is historical source/CI evidence, not live payments or a summarization V0.
 OWNER DESCRIPTION: completed V0 with text summary, simple TOP_UP/CHARGE/REFUND, direct execution and create_all. This differs from the inspected source; it is not represented as verified completion here.
-UNKNOWN: selected service for the reset, actual demand/latency/concurrency trigger, live bot/deployment and production provider/recovery evidence.
+UNKNOWN: measured growth trigger, external AI provider choice, actual bot/payment/deployment and production recovery evidence. The implementation follows the owner's described text-summary/direct scope; no separate trigger answer is invented.
 Paid checkout/orders and service activation remain off by default.
 
 ## 2. Architecture
 
 Target small baseline: Python/FastAPI + aiogram + PostgreSQL as a Modular Monolith. Channels call application/domain functions in platform_core. A small service uses direct execution by default; additions require a confirmed actual trigger.
-Current source: Telegram -> domain/PostgreSQL -> ARQ/Redis -> isolated PDF processing/S3 -> durable delivery; FastAPI/Next.js provide internal operations.
+Default: Telegram -> summary application/PostgreSQL -> direct Summarizer -> text result/receipt. Legacy: Telegram/domain/PostgreSQL -> ARQ/Redis/PDF/S3, with FastAPI/Next.js operations.
 Do not confuse the current dependency graph with the target minimum. Existing infrastructure is not proof of demand. The [architecture contract](../docs/ARCHITECTURE.md) separates active scope and historical foundation acceptance.
 The Digital Store remains an independent product.
 
@@ -31,7 +31,7 @@ These changes are existing history, not a mandate to expand the reset scope or e
 ## 4. Current Findings
 
 FACT: active guidance previously required workers for work that takes time and used the Telegram bot as product identity; this conflicts with the new owner-directed scope. This reset corrects instructions/contracts without claiming runtime simplification.
-FACT: the described summarization V0 is absent from source. Selecting/building it and replacing current execution are pending owner decisions.
+FACT: the starting source lacked the described summarizer. This continuation implements its minimal local/direct form and separates default/legacy startup, preserving financial/migration history.
 UNKNOWN: a current trigger for additional queues, UI, services or other complexity. None was supplied. Never infer confirmation from elapsed time.
 Existing live provider, storage, recovery and operator evidence gaps stay attributable, but apply to the actual selected service; optional features are not defects merely because they are missing.
 
@@ -61,7 +61,7 @@ Actual Telegram/payment/storage and deployment remain unqualified. These facts d
 ## 7. Ordered Engineering Gates
 
 1. Apply the explicitly requested scope/permanent rules and reconcile source facts in this reset.
-2. Obtain the service choice and actual background-execution trigger answer already requested.
+2. The continuation follows the text-summary/direct baseline; no queue expansion trigger was supplied. Resolve an external provider choice only if requested.
 3. For the chosen service, propose the smallest direct slice and warn about any premature stage jump before implementation.
 4. Implement one bounded confirmed change; preserve finance, data and already-adopted migrations.
 5. Select the smallest meaningful checks for changed behavior; use existing affected CI, not speculative new test/tool frameworks.
@@ -73,7 +73,7 @@ This is conditional work, not an automatic upgrade sequence. Before any new feat
 
 Select cases from the actual service: private identity, valid/invalid input, duplicate/concurrent financial requests, timeout/provider failure, explicit rejection and truthful result reporting.
 If the PDF service is retained, existing isolation, file ownership/expiry, send/restart and worker behavior remain relevant until a qualified replacement exists.
-If text summary is selected, qualify its input/output limits, AI adapter/failure behavior and direct execution; do not claim a processor exists before implementation.
+For direct text summary, qualify input/output limits, quote/payment replay, direct provider calls outside locks, failure/refund, cached result/actual delivery and minimal startup. An external AI provider and summary-quality benchmark remain unqualified.
 Select HTTP/admin/browser/Redis/storage cases only when they are affected or remain dependencies. Historical tests do not prove a new service/runtime.
 
 ## 9. Release Gates
@@ -86,7 +86,7 @@ Safety/correctness rules are immediate; growth infrastructure is conditional.
 
 Confirmed: Saudi/Arabic-first product, one developer, Modular Monolith, Telegram as first channel, thin handlers, atomic finance, explicit classified/logged error policies, external-provider abstractions and migration-only schema changes once Alembic exists. Before new features/complexity ask whether the real trigger exists; choose the simplest viable version and flag stage jumps.
 Existing payment decision remains Telegram Stars directly per order until explicitly revised. Qualified engineering merge authority persists.
-Pending questions: **text summary only or PDF merge only?** **Does an actual background-execution trigger exist, or should the selected path execute directly?**
+Continuation scope: the described text-summary/direct baseline. Local extractive summarization is the implemented default; the optional local/external-provider question remains open. A growth trigger was not provided; do not invent one.
 Other decisions only when needed: selected provider/model, Stars prices/final terms/support and authorized disposable environment. Never request tokens in chat.
 
 ## 11. Deferred Work
@@ -97,6 +97,6 @@ Production controls apply to the selected live flow and must not be replaced by 
 
 ## 12. Exact Immediate Next Round
 
-Complete the policy/source reconciliation round and its full diff/link/evidence review. Source runtime remains the existing gated PDF/Stars stack.
-The service/execution questions are pending; continue independent authorized work but do not choose the service, add AI/provider dependencies or remove worker/admin/data components by assumption.
-When the owner answers, verify live main, record the trigger answer and implement the smallest bounded selected slice. Keep Alembic/history and existing payment semantics unless explicitly changed. No automatic queue/dashboard expansion or launch.
+Qualify the direct local text-summary slice against its exact source, full diff, legacy regressions and actual minimal Compose deployment. Final proof is in its PR body; [preparation report](REPORTS/2026-10-02-DIRECT_SUMMARY.md).
+Default startup needs no worker/Redis/S3/Next.js; legacy history and configuration stay intact. No price, retention/privacy policy, external AI provider or paid activation is selected by implementation.
+After source qualification, remaining dependent work is owner-set prices/final terms/support and an authorized disposable bot for actual invoice/receipt/result/refund, plus appropriate DB backup/recovery. Do not add queues/UI/services or provider frameworks without asking for their actual trigger. Never request secret values in chat.

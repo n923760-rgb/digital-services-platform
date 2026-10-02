@@ -32,13 +32,14 @@ Before proposing or implementing any new feature or complexity, ask the owner: *
 For a feature request, propose the smallest implementation that solves the current problem and preserves module boundaries. State clearly if it jumps a stage. Do not invent traffic thresholds, service prices, SLAs or provider choices.
 
 These rules apply at every stage, including V0:
+
 1. Keep Telegram/HTTP handlers thin: parse/authenticate input, invoke application functions, present the result. Business decisions and financial state belong in platform_core.
 2. Every financial database transition is one atomic transaction, including its ledger/receipt, state and idempotency changes. Never split related writes across commits. External provider I/O cannot be made atomic by a PostgreSQL transaction; call it outside locks and persist its verified outcome atomically. Retain explicit handling for uncertain outcomes.
 3. Never swallow failures silently. Classify expected rejection, temporary provider/infrastructure failure, financial uncertainty and unexpected fault; log a sanitized error code/class at the handling boundary and apply a stated response/retry/refund/stop policy. Do not leak tokens, provider response bodies or customer text; a customer error message alone is not logging.
 4. Every external AI/storage/payment provider is behind a small callable or interface/adapter. Keep provider SDK specifics out of business logic and handlers; a single implementation does not require a plugin framework.
 5. Once Alembic exists, every schema change uses a reviewed migration. This repository already uses Alembic through 0016: no create_all path, manual schema edits, migration-history deletion or destructive financial downgrade.
 
-Read [scope and architecture decision](docs/SCOPE.md). The owner's described V0 (text summarization, TOP_UP/CHARGE/REFUND, direct execution, create_all) is a desired baseline, not a verified description of this source. Existing PDF/Stars/worker/admin code and financial history must not be relabelled as V0 or deleted by assumption. Changing the live service/execution path requires the pending service/trigger answer and a bounded implementation round. Existing components do not establish demand for their expansion.
+Read [scope and architecture decision](docs/SCOPE.md). The owner's described V0 (text summarization, TOP_UP/CHARGE/REFUND, direct execution, create_all) is a desired baseline, not a verified description of this source. Existing PDF/Stars/worker/admin code and financial history must not be relabelled as V0 or deleted by assumption. The owner's continuation follows the described summary/direct baseline: [direct slice](docs/DIRECT-SUMMARY.md). Default runtime is text-only, while prior infrastructure/source/history remain in docker-compose.legacy.yml. No measured growth trigger or external AI choice was supplied; never invent one. Existing components do not establish demand for expansion.
 
 ## Owner-approved product direction
 
@@ -68,13 +69,13 @@ Open a reviewable PR; leave unqualified changes as draft. Do not merge without e
 
 ## Validation
 
-Required toolchain derived from source: Python 3.12.14, Node 22.23.3, PostgreSQL 16, Redis, Docker Compose V2 and Linux PDF resource controls.
+Default toolchain: Python 3.12.14, PostgreSQL 16 and Compose V2. Preserved legacy source/CI additionally use Node 22.23.3, Redis and Linux PDF resource controls; these are not default service runtime dependencies.
 Python setup: use the exact hashed build/dev requirements and no-dependency editable install in docs/DEPENDENCIES.md; run scripts/verify_dependency_artifacts.py and pip check. Set TEST_REDIS_URL to isolated Redis for limiter tests.
 Static check: ruff check apps packages tests migrations scripts.
 Database/test checks: alembic upgrade head; pytest -q; alembic current.
 Run database tests only against a dedicated disposable migrated PostgreSQL database; financial tests preserve history.
 Web checks in apps/web: npm ci; npm audit --omit=dev; npm run typecheck; npm run build; isolated tests/browser npm ci and Chromium checks in ci.yml (synthetic API, not live-backend proof). Review lock/fingerprint changes only in a bounded dependency task; never bypass hash validation or use floating installs during ordinary work.
-Compose qualification follows .github/workflows/ci.yml in an isolated test deployment. Never run infrastructure/backup/restore_smoke.sh against production: it writes a seed row to its configured source DB even before creating its restore target.
+Compose qualification follows .github/workflows/ci.yml: preserve all full-stack regressions using docker-compose.legacy.yml and qualify minimal docker-compose.yml with no Redis/storage/worker service in an isolated test deployment. Never run infrastructure/backup/restore_smoke.sh against production: it writes a seed row to its configured source DB even before creating its restore target.
 Select the smallest meaningful proof, then affected regressions. Do not claim local PASS from historical CI or a different SHA. Documentation-only edits need link/schema/diff review, not new tests that mirror prose.
 Foundation CI job names: python, web, compose. Dependency advisory audit has job audit; qualify both exact-source workflows. See docs/DEPENDENCY-AUDIT.md for coverage and unavailable-scan handling. Reverify actual run/check names and exact source; protection is not assumed.
 Use PASS / FAIL / BLOCKED / UNKNOWN / NOT RUN / SKIPPED truthfully.

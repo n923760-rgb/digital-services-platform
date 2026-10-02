@@ -37,7 +37,7 @@ def checkout_enabled(settings) -> bool:
                 and settings.telegram_payment_support.strip())
 
 
-async def invoice(callback: CallbackQuery, bot: Bot) -> None:
+async def invoice(callback: CallbackQuery, bot: Bot, *, service_slug: str | None = None) -> None:
     from uuid import UUID
 
     settings = get_settings()
@@ -56,19 +56,20 @@ async def invoice(callback: CallbackQuery, bot: Bot) -> None:
         connection = await asyncpg.connect(settings.database_url.replace("+asyncpg", ""))
         user_id = await ensure_telegram_user(connection, callback.from_user.id)
         payment = await create_star_invoice(
-            connection, user_id, workflow_id, revision, settings.telegram_payment_terms.strip(),
+            connection, user_id, workflow_id, revision, settings.telegram_payment_terms.strip(), **({"service_slug": service_slug} if service_slug else {}),
         )
         if payment.order_id:
             await callback.message.answer(f"دفعك مسجل مسبقًا. رقم الطلب: {payment.order_id}")
             return
         await bot.send_invoice(
-            chat_id=callback.from_user.id, title="دمج ملفات PDF",
+            chat_id=callback.from_user.id, title=payment.title[:32],
             description="دفع مباشر لهذا الطلب. التنفيذ بعد تأكيد الدفع. الشروط: /terms",
             payload=payment.payload, provider_token="", currency="XTR",
-            prices=[LabeledPrice(label="دمج PDF", amount=payment.amount_stars)],
+            prices=[LabeledPrice(label=payment.title[:32], amount=payment.amount_stars)],
             start_parameter="stars-payment", protect_content=True,
         )
     except (ValueError, StaleQuote):
+        logger.info("star_invoice_rejected")
         await callback.message.answer("تغير العرض أو انتهى. راجع السعر والشروط وأكد من الزر الجديد.")
     except (TelegramAPIError, asyncpg.PostgresError, OSError):
         logger.warning("star_invoice_unavailable")
@@ -78,7 +79,7 @@ async def invoice(callback: CallbackQuery, bot: Bot) -> None:
             await connection.close()
 
 
-async def precheckout(query: PreCheckoutQuery) -> None:
+async def precheckout(query: PreCheckoutQuery, *, service_slug: str | None = None) -> None:
     settings = get_settings()
     connection = None
     accepted = False
@@ -92,6 +93,7 @@ async def precheckout(query: PreCheckoutQuery) -> None:
                 await approve_star_checkout(
                     connection, query.from_user.id, query.invoice_payload, query.currency,
                     query.total_amount, query.id, terms_digest(settings),
+                    **({"service_slug": service_slug} if service_slug else {}),
                 )
                 accepted = True
     except (ValueError, asyncpg.PostgresError, OSError):

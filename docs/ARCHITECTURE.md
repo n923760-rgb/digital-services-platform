@@ -10,11 +10,11 @@ Prefer a direct service call for a small workload. Add background execution, Red
 
 ## Current source, not the target minimum
 
-The current repository implements PDF merge, SAR reservation/settlement history, native direct-per-order Stars, persisted Telegram workflows, ARQ workers, S3 file handling/PDF isolation and Next.js administration. It has no registered text-summary processor or AI summarization adapter. A reported completed V0 must not be substituted for these source facts.
+The current repository implements PDF merge, SAR reservation/settlement history, native direct-per-order Stars, persisted Telegram workflows, ARQ workers, S3 file handling/PDF isolation and Next.js administration. It also has a direct local summarizer behind a small interface; this bypasses the legacy PROCESSORS/worker registry and uses no generative AI. The original completed-V0 description differed from the starting source.
 
-Changing the selected service and runtime awaits the owner answers recorded in [the roadmap](../ENGINEERING/MASTER_ROADMAP.md). Existing infrastructure is retained during this policy reset; its presence does not prove demand or justify expansion. PDF isolation, durable financial receipts and existing data must be assessed before any removal. The Digital Store remains independent.
+The continuation implements the described text-summary/direct slice; see [direct service](DIRECT-SUMMARY.md) and [the roadmap](../ENGINEERING/MASTER_ROADMAP.md). Default Compose uses DB/migrator/API plus the optional text bot. Existing infrastructure stays in docker-compose.legacy.yml; its presence does not prove demand. PDF isolation, durable financial receipts and existing data must be assessed before any removal. The Digital Store remains independent.
 
-Existing readiness probes, Compose startup and CI still cover the current stack. They do not represent a new requirement that every small service use Redis, S3, workers or Next.js. Validate the actually selected slice; never describe a future direct-execution path as implemented.
+Minimal readiness needs only migrated PostgreSQL. Legacy readiness/CI still cover old dependencies; direct/minimal checks qualify the selected slice. Legacy startup uses its explicit Compose file. Paid/provider/deployment readiness still needs actual staging.
 
 ## Historical FOUNDATION-001 acceptance (superseded source snapshot)
 

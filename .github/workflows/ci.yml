@@ -76,27 +76,34 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - run: cp .env.example .env
-      - run: docker compose config --quiet
+      - run: docker compose -f docker-compose.legacy.yml config --quiet
       - run: >-
-          docker compose config --format json |
+          docker compose -f docker-compose.legacy.yml config --format json |
           python -c 'import json,sys; s=json.load(sys.stdin)["services"]["pdf-sandbox"];
           assert s["network_mode"]=="none" and s["read_only"] is True;
           assert not {"DATABASE_URL","TELEGRAM_BOT_TOKEN","OBJECT_STORAGE_SECRET_KEY"}
           & set(s.get("environment",{}))'
       - run: >-
-          docker compose config --format json |
+          docker compose -f docker-compose.legacy.yml config --format json |
           python -c 'import json,sys; s=json.load(sys.stdin)["services"]["backup"];
           assert s["read_only"] is True and s["user"]=="10001:10001";
           assert not {"DATABASE_URL","TELEGRAM_BOT_TOKEN","OBJECT_STORAGE_SECRET_KEY"}
           & set(s["environment"])'
-      - run: docker compose up -d --build --wait db redis object-storage migrate backup api worker web caddy
-      - run: docker compose exec -T backup sh /backup-scripts/check_freshness.sh
-      - run: docker compose run --rm -T -e CI_RESTORE_TEST=1 backup sh /backup-scripts/restore_smoke.sh
-      - run: docker compose exec -T worker python -m platform_core.pdf_sandbox_smoke
-      - run: docker compose exec -T -e CI_PROXY_TEST=1 worker python -m platform_core.proxy_smoke
-      - run: docker compose run --rm -T -e CI_PROXY_TEST=1 migrate python -m platform_core.proxy_smoke
+      - run: docker compose -f docker-compose.legacy.yml up -d --build --wait db redis object-storage migrate backup api worker web caddy
+      - run: docker compose -f docker-compose.legacy.yml exec -T backup sh /backup-scripts/check_freshness.sh
+      - run: docker compose -f docker-compose.legacy.yml run --rm -T -e CI_RESTORE_TEST=1 backup sh /backup-scripts/restore_smoke.sh
+      - run: docker compose -f docker-compose.legacy.yml exec -T worker python -m platform_core.pdf_sandbox_smoke
+      - run: docker compose -f docker-compose.legacy.yml exec -T -e CI_PROXY_TEST=1 worker python -m platform_core.proxy_smoke
+      - run: docker compose -f docker-compose.legacy.yml run --rm -T -e CI_PROXY_TEST=1 migrate python -m platform_core.proxy_smoke
       - run: curl --fail http://localhost/api/health/ready
       - run: curl --fail http://localhost/api/health/live
       - run: curl --fail http://localhost/web-health
       - if: always()
-        run: docker compose logs --no-color --tail 100
+        run: docker compose -f docker-compose.legacy.yml logs --no-color --tail 100
+      - name: Minimal direct-service deployment without Redis or workers
+        run: |
+          docker compose -p dsp-v0-ci config --format json > /tmp/dsp-v0-compose.json
+          python -c 'import json; c=json.load(open("/tmp/dsp-v0-compose.json")); assert {"db","migrate","api"} <= set(c["services"]) <= {"db","migrate","api","telegram-bot"}; assert c["services"]["api"]["command"][1] == "apps.api.v0:app"'
+          docker compose -p dsp-v0-ci up -d --build --wait db migrate api
+          curl --fail http://127.0.0.1:8100/api/health/ready
+          docker compose -p dsp-v0-ci exec -T api python -c 'import apps.telegram_bot.v0; print("Direct summary bot imports without a worker runtime")'
