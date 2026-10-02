@@ -103,7 +103,13 @@ jobs:
       - name: Minimal direct-service deployment without Redis or workers
         run: |
           docker compose -p dsp-v0-ci config --format json > /tmp/dsp-v0-compose.json
-          python -c 'import json; c=json.load(open("/tmp/dsp-v0-compose.json")); assert {"db","migrate","api"} <= set(c["services"]) <= {"db","migrate","api","telegram-bot"}; assert c["services"]["api"]["command"][1] == "apps.api.v0:app"'
+          python -c 'import json; c=json.load(open("/tmp/dsp-v0-compose.json")); assert {"db","migrate","api"} <= set(c["services"]) <= {"db","migrate","api","telegram-bot","web","caddy"}; assert c["services"]["api"]["command"][1] == "apps.api.v0:app"'
           docker compose -p dsp-v0-ci up -d --build --wait db migrate api
           curl --fail http://127.0.0.1:8100/api/health/ready
           docker compose -p dsp-v0-ci exec -T api python -c 'import apps.telegram_bot.v0; print("Direct summary bot imports without a worker runtime")'
+      - name: Optional product administration without Redis or workers
+        run: |
+          docker compose -p dsp-v0-ci -f docker-compose.yml -f tests/compose.catalog.yml --profile admin up -d --build --wait api web caddy
+          curl --fail --silent --output /dev/null http://127.0.0.1:8101/admin
+          docker compose -p dsp-v0-ci exec -T -e CI_CATALOG_TEST=1 api python -m platform_core.catalog_smoke
+          docker compose -p dsp-v0-ci run --rm -T -e CI_CATALOG_TEST=1 -e CI_CATALOG_IDENTITY_ONLY=1 migrate python -m platform_core.catalog_smoke

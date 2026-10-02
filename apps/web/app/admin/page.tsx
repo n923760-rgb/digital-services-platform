@@ -9,7 +9,7 @@ type CustomRequest = { id: string; description: string; status: "NEW" | "IN_REVI
 type FailedWork = { id: string; order_id: string; service_name: string; error_code: string | null; attempt_count: number; max_attempts: number; failed_at: string | null };
 type FailedPayment = { id: string; provider: string; amount_halalas: number; created_at: string };
 type Attention = { jobs: FailedWork[]; deliveries: FailedWork[]; payments: FailedPayment[] };
-type Service = { id: string; slug: string; name_ar: string; description_ar: string; category_name_ar: string; processor_type: string; base_price_halalas: number; base_price_stars?: number | null; enabled: boolean; revision: number };
+type Service = { id: string; slug: string; name_ar: string; description_ar: string; category_name_ar: string; processor_type: string; processor_key?: string | null; base_price_halalas: number; base_price_stars?: number | null; enabled: boolean; revision: number };
 type Category = { id: string; slug: string; name_ar: string; enabled: boolean };
 
 const currency = (halalas: number) => new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(halalas / 100);
@@ -28,6 +28,9 @@ export default function AdminPage() {
   const [attention, setAttention] = useState<Attention | null>(null);
   const [services, setServices] = useState<Service[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [newExecutor, setNewExecutor] = useState("summarize-text");
+  const [productPending, setProductPending] = useState(false);
+  const productBusy = useRef(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -146,7 +149,7 @@ export default function AdminPage() {
         method: "PATCH", credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ expected_revision: service.revision, reason: fields.get("reason"),
-          description_ar: fields.get("description"), base_price_halalas: price,
+          name_ar: fields.get("product_name"), description_ar: fields.get("description"), base_price_halalas: price,
           ...(stars === null ? {} : { base_price_stars: stars }), enabled,
           confirm: enabled !== service.enabled }),
       });
@@ -191,18 +194,17 @@ export default function AdminPage() {
     const stars = starsText ? starsFromInput(starsText) : null;
     if (starsText && stars === null) { setError("السعر بالنجوم يجب أن يكون عددًا صحيحًا من 1 إلى 100,000"); return; }
     const price = 0;
-    let schema: unknown;
-    try { schema = JSON.parse(String(fields.get("input_schema") ?? "{}")); }
-    catch { setError("صيغة حقول الخدمة غير صحيحة"); return; }
-    if (!schema || typeof schema !== "object" || Array.isArray(schema)) {
-      setError("حقول الخدمة يجب أن تكون كائن JSON"); return;
-    }
+    const executor = String(fields.get("processor_key") ?? "");
+    const schema = executor === "summarize-text" ? { max_characters: 4000 } : {};
+    if (productBusy.current) return;
+    productBusy.current = true; setProductPending(true);
     try {
       const result = await fetch("/api/admin/services", {
         method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ category_id: fields.get("category_id"), slug: fields.get("slug"),
           name_ar: fields.get("name_ar"), description_ar: fields.get("description_ar"),
-          processor_type: fields.get("processor_type"), base_price_halalas: price, base_price_stars: stars,
+          processor_type: executor ? "tool" : "manual", processor_key: executor || null,
+          base_price_halalas: price, base_price_stars: stars,
           input_schema: schema, reason: fields.get("reason") }),
       });
       if (epoch !== sessionEpoch.current) return;
@@ -211,6 +213,7 @@ export default function AdminPage() {
       form.reset();
       await refresh();
     } catch (e) { if (epoch === sessionEpoch.current) setError(e instanceof Error ? e.message : "تعذر تسجيل الخدمة"); }
+    finally { productBusy.current = false; setProductPending(false); }
   }
 
   async function triageCustomRequest(event: FormEvent<HTMLFormElement>, item: CustomRequest, action: "START_REVIEW" | "DECLINE") {
@@ -313,6 +316,7 @@ export default function AdminPage() {
     </section>
     <section style={{ ...card, marginBottom: 24 }} aria-label="كتالوج الخدمات">
       <h2>الخدمات</h2>
+      <p>تظهر المنتجات المفعّلة ذات السعر وطريقة التنفيذ الجاهزة في قائمة /services عند فتحها في البوت. الإضافة تُحفظ كمسودة؛ تعديل السعر يسري على العروض الجديدة والطلبات المدفوعة تحتفظ بسعرها.</p>
       {!admin.service_activation_enabled && <p>تفعيل الخدمات الجديدة مؤجل حتى اكتمال متطلبات الإطلاق. يمكنك مراجعة الأسعار والأوصاف وإيقاف خدمة مفعّلة.</p>}
       {admin.role === "OWNER" && <>
         <details style={{ marginBottom: 12 }}><summary style={{ cursor: "pointer" }}>إضافة تصنيف</summary>
@@ -332,22 +336,23 @@ export default function AdminPage() {
             <label>اسم الخدمة<br /><input name="name_ar" required minLength={2} maxLength={120} /></label>
             <label>الاسم المختصر بالإنجليزية<br /><input name="slug" required pattern="[a-z0-9]+(-[a-z0-9]+)*" maxLength={60} dir="ltr" /></label>
             <label>الوصف<br /><textarea name="description_ar" maxLength={1000} rows={3} /></label>
-            <label>المعالج<br /><select name="processor_type" defaultValue="tool">
-              <option value="tool">أداة</option><option value="ai">ذكاء اصطناعي</option><option value="template">قالب</option>
-              <option value="manual">يدوي</option><option value="hybrid">مختلط</option>
+            <label>طريقة التنفيذ<br /><select name="processor_key" value={newExecutor} onChange={event => setNewExecutor(event.target.value)}>
+              <option value="summarize-text">تلخيص نص محلي</option>
+              <option value="">مسودة — التنفيذ غير جاهز</option>
             </select></label>
+            <small>{newExecutor ? "يختار جملًا من النص؛ ليس ذكاء اصطناعيًا توليديًا. الحد 4,000 حرف." : "تُحفظ الخدمة فقط، ولا تظهر للشراء حتى تجهيز طريقة تنفيذها."}</small>
             <label>السعر بالنجوم<br /><input name="stars" inputMode="numeric" placeholder="غير محدد" /></label>
-            <label>حقول الخدمة (JSON)<br /><textarea name="input_schema" dir="ltr" defaultValue="{}" rows={3} maxLength={4000} style={{ width: "100%" }} /></label>
-            <small>لأداة دمج PDF: {`{"min_files":2,"max_files":10,"file_mime":"application/pdf"}`}</small>
             <label>سبب الإضافة<br /><input name="reason" required minLength={10} maxLength={500} /></label>
-            <button type="submit" disabled={!categories.some(category => category.enabled)} style={{ width: "fit-content", padding: 10 }}>تسجيل الخدمة</button>
+            <button type="submit" disabled={productPending || authPending || !categories.some(category => category.enabled)} aria-busy={productPending} style={{ width: "fit-content", padding: 10 }}>{productPending ? "جارٍ تسجيل الخدمة…" : "تسجيل الخدمة"}</button>
           </form>
         </details>
       </>}
       {services.map(service => <details key={service.id} style={{ borderTop: "1px solid #e6ebed", paddingBlock: 12 }}>
         <summary style={{ cursor: "pointer" }}><strong>{service.name_ar}</strong> · {service.category_name_ar} · {service.base_price_stars ? `${service.base_price_stars} ⭐` : "سعر النجوم غير محدد"} · {service.enabled ? "مفعّلة" : "معطّلة"}</summary>
-        <p dir="ltr" style={{ textAlign: "right" }}>{service.slug} · {service.processor_type} · revision {service.revision}</p>
+        <p>التنفيذ: {service.processor_key === "summarize-text" ? "تلخيص نص محلي" : service.processor_key === "merge-pdf" ? "دمج PDF في البيئة القديمة" : "غير جاهز"}</p>
+        <p dir="ltr" style={{ textAlign: "right" }}>{service.slug} · revision {service.revision}</p>
         {admin.role === "OWNER" ? <form key={service.revision} onSubmit={event => void saveService(event, service)} style={{ display: "grid", gap: 10, maxWidth: 500 }}>
+          <label>اسم المنتج<br /><input name="product_name" defaultValue={service.name_ar} required minLength={2} maxLength={120} /></label>
           <label>الوصف<br /><textarea name="description" defaultValue={service.description_ar} maxLength={1000} rows={3} style={{ width: "100%" }} /></label>
           <label>السعر بالنجوم<br /><input name="stars" inputMode="numeric" defaultValue={service.base_price_stars ?? ""} placeholder="غير محدد" aria-describedby={`stars-price-help-${service.id}`} /></label>
           <small id={`stars-price-help-${service.id}`}>تركه فارغًا يبقي السعر الحالي.</small>

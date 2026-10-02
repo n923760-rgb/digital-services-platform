@@ -22,11 +22,17 @@ curl --fail http://127.0.0.1:8100/api/health/ready
 
 Check `docker compose ps` and `docker compose logs api`. Alembic completes before API startup; no Redis, worker, storage emulator or web UI is started.
 
-For Telegram, set a valid `TELEGRAM_BOT_TOKEN` in the secret store/untracked `.env`, then use `docker compose --profile telegram up -d --build telegram-bot`. The default entrypoint is `apps.telegram_bot.v0`: /summary, /orders, /cancel, /terms and /paysupport. Checkout stays off without qualified configuration; do not start two pollers for one token.
+For Telegram, set a valid `TELEGRAM_BOT_TOKEN` in the secret store/untracked `.env`, then use `docker compose --profile telegram up -d --build telegram-bot`. The default entrypoint is `apps.telegram_bot.v0`: /services, /summary, /orders, /cancel, /terms and /paysupport. Checkout stays off without qualified configuration; do not start two pollers for one token.
 
 Initialize an OWNER through `docker compose exec -it api python -m platform_core.admin_bootstrap`. Configure the owner-selected price using `python -m platform_core.summary_setup --price-stars <owner-value> --reason '<reason>'` inside the API container. Credentials are entered interactively. `--activate` also requires SERVICE_ACTIVATION_ENABLED; checkout requires both Telegram flags and actual terms/support. This change selects no live price or launch configuration.
 
 Before switching an existing stack, resolve outstanding legacy orders, then stop its bot/worker/API/web/Caddy with `docker compose -f docker-compose.legacy.yml stop telegram-bot worker api web caddy`. The new bot refuses startup with outstanding legacy work. Project/database-volume names are preserved; never remove volumes to simplify architecture.
+
+## Optional product administration
+
+The owner confirmed a current need for service products managed from the existing panel. The [product catalog](docs/PRODUCT-CATALOG.md) supports creating drafts, later name/description/Stars-price edits and explicit activation. The direct bot reads supported active products from PostgreSQL through /services; no restart is required. Its current execution method is local text summarization; registering a product does not implement another capability.
+
+Run `docker compose --profile admin up -d --build --wait api web caddy` and open http://127.0.0.1:8101/admin. For this loopback HTTP setup only, configure ADMIN_COOKIE_SECURE=false in the untracked configuration and recreate API; secure cookies remain the default. Reuse interactive OWNER bootstrap. The optional panel requires no Redis/storage/worker. Do not use the CI override against live data or enable paid checkout before actual staging and owner terms/support/prices.
 
 ## Preserved legacy stack
 

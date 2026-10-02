@@ -21,8 +21,13 @@ services:
     depends_on:
       db: {condition: service_healthy}
   api:
+    networks:
+      default: {}
+      product_admin_proxy:
+        aliases: [api-proxy]
+        ipv4_address: ${PRODUCT_API_PROXY_IP:-172.31.0.3}
     build: {context: ., dockerfile: Dockerfile.python}
-    command: ["uvicorn", "apps.api.v0:app", "--host", "0.0.0.0", "--port", "8000"]
+    command: ["uvicorn", "apps.api.v0:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "${PRODUCT_TRUSTED_PROXY_IP:-172.31.0.2},127.0.0.1"]
     env_file: .env
     ports: ["127.0.0.1:8100:8000"]
     restart: unless-stopped
@@ -46,5 +51,36 @@ services:
       interval: 20s
       timeout: 5s
       retries: 5
+  web:
+    profiles: [admin]
+    build: {context: ./apps/web}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/web-health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+  caddy:
+    profiles: [admin]
+    networks:
+      default: {}
+      product_admin_proxy:
+        ipv4_address: ${PRODUCT_TRUSTED_PROXY_IP:-172.31.0.2}
+    image: caddy:2-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b
+    restart: unless-stopped
+    ports: ["127.0.0.1:8101:80"]
+    environment:
+      SITE_ADDRESS: ":80"
+    volumes:
+      - ./infrastructure/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      api: {condition: service_healthy}
+      web: {condition: service_healthy}
 volumes:
   postgres_data:
+networks:
+  product_admin_proxy:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${PRODUCT_PROXY_NETWORK_SUBNET:-172.31.0.0/29}

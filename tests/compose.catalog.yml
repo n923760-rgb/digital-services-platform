@@ -1,0 +1,9 @@
+# Disposable CI deployment only; never apply this override to a live database/bot.
+services:
+  api:
+    environment:
+      ADMIN_COOKIE_SECURE: "false"
+      SERVICE_ACTIVATION_ENABLED: "true"
+      TELEGRAM_ORDERS_ENABLED: "false"
+      TELEGRAM_STARS_ENABLED: "false"
+      TELEGRAM_BOT_TOKEN: ""

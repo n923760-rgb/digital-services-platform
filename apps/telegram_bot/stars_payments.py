@@ -37,7 +37,8 @@ def checkout_enabled(settings) -> bool:
                 and settings.telegram_payment_support.strip())
 
 
-async def invoice(callback: CallbackQuery, bot: Bot, *, service_slug: str | None = None) -> None:
+async def invoice(callback: CallbackQuery, bot: Bot, *, service_slug: str | None = None,
+                  processor_key: str | None = None) -> None:
     from uuid import UUID
 
     settings = get_settings()
@@ -57,6 +58,7 @@ async def invoice(callback: CallbackQuery, bot: Bot, *, service_slug: str | None
         user_id = await ensure_telegram_user(connection, callback.from_user.id)
         payment = await create_star_invoice(
             connection, user_id, workflow_id, revision, settings.telegram_payment_terms.strip(), **({"service_slug": service_slug} if service_slug else {}),
+            **({"processor_key": processor_key} if processor_key else {}),
         )
         if payment.order_id:
             await callback.message.answer(f"دفعك مسجل مسبقًا. رقم الطلب: {payment.order_id}")
@@ -79,7 +81,8 @@ async def invoice(callback: CallbackQuery, bot: Bot, *, service_slug: str | None
             await connection.close()
 
 
-async def precheckout(query: PreCheckoutQuery, *, service_slug: str | None = None) -> None:
+async def precheckout(query: PreCheckoutQuery, *, service_slug: str | None = None,
+                      processor_key: str | None = None) -> None:
     settings = get_settings()
     connection = None
     accepted = False
@@ -94,6 +97,7 @@ async def precheckout(query: PreCheckoutQuery, *, service_slug: str | None = Non
                     connection, query.from_user.id, query.invoice_payload, query.currency,
                     query.total_amount, query.id, terms_digest(settings),
                     **({"service_slug": service_slug} if service_slug else {}),
+                    **({"processor_key": processor_key} if processor_key else {}),
                 )
                 accepted = True
     except (ValueError, asyncpg.PostgresError, OSError):

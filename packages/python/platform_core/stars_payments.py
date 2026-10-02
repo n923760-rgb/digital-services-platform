@@ -45,7 +45,7 @@ def invoice_id(payload: str) -> UUID:
 async def _offer(connection, user_id, workflow_id):
     row = await connection.fetchrow(
         """SELECT w.*,s.base_price_stars,s.enabled,c.enabled AS category_enabled,
-           s.slug,s.name_ar,s.processor_type,s.input_schema,
+           s.slug,s.name_ar,s.processor_type,s.processor_key,s.input_schema,
            t.input_digest,t.retention_until AS text_retention_until FROM telegram_workflows w
            JOIN services s ON s.id=w.service_id JOIN service_categories c ON c.id=s.category_id
            LEFT JOIN summary_inputs t ON t.workflow_id=w.id
@@ -77,10 +77,11 @@ def _current_offer(row, files, invoice, *, check_price=True) -> bool:
         schema = json.loads(schema)
     supported = (
         (row["slug"] == "merge-pdf" and schema == {"min_files": 2, "max_files": 10, "file_mime": "application/pdf"})
-        or (row["slug"] == SLUG and schema == TEXT_INPUT_SCHEMA
+        or (row["processor_key"] == SLUG and schema == TEXT_INPUT_SCHEMA
             and row["input_digest"] == invoice.get("input_text_digest") and not files)
     )
     return (supported
+            and row["service_id"] == invoice["service_id"]
             and row["status"] == "CONFIRMING" and row["quote_revision"] == invoice["quote_revision"]
             and row["enabled"] and row["category_enabled"]
             and row["processor_type"] == "tool" and files == list(invoice["file_ids"])
@@ -90,7 +91,7 @@ def _current_offer(row, files, invoice, *, check_price=True) -> bool:
 
 
 async def _inputs_ready(connection, invoice, row, files):
-    if row["slug"] == SLUG:
+    if row["processor_key"] == SLUG:
         return bool(await connection.fetchval(
             "SELECT 1 FROM summary_inputs WHERE workflow_id=$1 AND user_id=$2 AND retention_until>now()",
             row["id"], row["user_id"],
@@ -101,6 +102,7 @@ async def _inputs_ready(connection, invoice, row, files):
 async def create_star_invoice(
     connection: asyncpg.Connection, user_id: UUID, workflow_id: UUID,
     quote_revision: int, terms_text: str, *, service_slug: str | None = None,
+    processor_key: str | None = None,
 ) -> StarInvoice:
     terms_text = terms_text.strip()
     terms_digest = hashlib.sha256(terms_text.encode()).hexdigest()
@@ -109,7 +111,8 @@ async def create_star_invoice(
     async with connection.transaction():
         await _lock_wallet(connection, user_id)
         row, files = await _offer(connection, user_id, workflow_id)
-        if row["quote_revision"] != quote_revision or (service_slug and row["slug"] != service_slug):
+        if (row["quote_revision"] != quote_revision or (service_slug and row["slug"] != service_slug)
+                or (processor_key and row["processor_key"] != processor_key)):
             raise StaleQuote("offer changed")
         existing = await connection.fetchrow(
             "SELECT * FROM star_invoices WHERE workflow_id=$1 AND quote_revision=$2",
@@ -119,7 +122,7 @@ async def create_star_invoice(
             return StarInvoice(existing["id"], existing["amount_stars"], existing["order_id"], row["name_ar"])
         offer = {"quote_revision": quote_revision, "file_ids": files,
                  "amount_stars": row["quoted_price_stars"], "terms_digest": terms_digest,
-                 "input_text_digest": row["input_digest"], "user_id": user_id}
+                 "input_text_digest": row["input_digest"], "user_id": user_id, "service_id": row["service_id"]}
         if (type(offer["amount_stars"]) is not int
                 or not 1 <= offer["amount_stars"] <= MAX_STARS
                 or not _current_offer(row, files, offer)
@@ -155,7 +158,7 @@ def _amount_matches(invoice, currency, amount):
 
 async def approve_star_checkout(
     connection, telegram_user_id, payload, currency, amount, query_id, terms_digest,
-    *, service_slug: str | None = None,
+    *, service_slug: str | None = None, processor_key: str | None = None,
 ):
     async with connection.transaction():
         invoice = await _owned_invoice(connection, telegram_user_id, payload)
@@ -166,6 +169,7 @@ async def approve_star_checkout(
             "SELECT * FROM star_invoices WHERE id=$1 FOR UPDATE", invoice["id"],
         )
         if ((service_slug and row["slug"] != service_slug)
+                or (processor_key and row["processor_key"] != processor_key)
                 or invoice["order_id"] or invoice["terms_digest"] != terms_digest
                 or invoice["checkout_query_id"] not in (None, query_id)
                 or not _current_offer(row, files, invoice)
@@ -185,7 +189,7 @@ async def _event(connection, charge_id, kind, receipt=None):
 
 async def accept_star_payment(
     connection, telegram_user_id, payload, currency, amount, charge_id, *, allow_fulfillment,
-    service_slug: str | None = None,
+    service_slug: str | None = None, processor_key: str | None = None,
 ) -> UUID | None:
     if not isinstance(charge_id, str) or not 1 <= len(charge_id) <= 200:
         raise StarsMismatch("invalid charge identity")
@@ -211,6 +215,7 @@ async def accept_star_payment(
         )
         await _event(connection, charge_id, "PAID")
         eligible = (allow_fulfillment and (service_slug is None or row["slug"] == service_slug)
+                    and (processor_key is None or row["processor_key"] == processor_key)
                     and invoice["checkout_query_id"] and not invoice["order_id"]
                     and _current_offer(row, files, invoice, check_price=False)
                     and await _inputs_ready(connection, invoice, row, files))
@@ -234,7 +239,7 @@ async def accept_star_payment(
                 "INSERT INTO order_files (order_id,position,file_id) VALUES ($1,$2,$3)",
                 order_id, position, file_id,
             )
-        if row["slug"] != SLUG:
+        if row["processor_key"] != SLUG:
             await connection.execute(
                 "INSERT INTO jobs (id,order_id,status) VALUES ($1,$2,'PENDING')", uuid4(), order_id,
             )

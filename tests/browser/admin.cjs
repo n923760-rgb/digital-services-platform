@@ -17,7 +17,7 @@ const fixture = {
       created_at: timestamp, failed_jobs: 0 }],
   attention: { jobs: [], deliveries: [], payments: [] },
   services: [{ id, slug: "pdf-merge", name_ar: long, description_ar: long, category_name_ar: long,
-    processor_type: "tool", base_price_halalas: 1250, base_price_stars: 37, enabled: false, revision: 1 }],
+    processor_type: "tool", processor_key: "summarize-text", base_price_halalas: 1250, base_price_stars: 37, enabled: false, revision: 1 }],
   categories: [{ id, slug: "files", name_ar: long, enabled: true }],
   "custom-requests": [{ id, description: long, status: "NEW", revision: 1,
     reviewer_username: null, telegram_user_id: 12345, created_at: timestamp, updated_at: timestamp }],
@@ -33,7 +33,8 @@ async function open(browser, { authenticated = true, role = "OWNER", paged = fal
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await context.newPage();
   const state = { authenticated, role, loginCount: 0, logoutCount: 0, logoutFails: false,
-    loginGate: null, overviewGate: null, pageGate: null, pageFails: false, pageUnauthorized: false, olderCount: 0, cursors: [], serviceWrites: [] };
+    loginGate: null, overviewGate: null, pageGate: null, pageFails: false, pageUnauthorized: false, olderCount: 0, cursors: [], serviceWrites: [], productCreates: [], productGate: null,
+    services: fixture.services.map(item => ({ ...item })) };
   const firstPage = Array.from({ length: 50 }, (_, index) => ({
     ...fixture["custom-requests"][0], id: "00000000-0000-4000-8000-" + String(50 - index).padStart(12, "0"),
     updated_at: "2026-10-01T12:00:00.123456Z",
@@ -67,9 +68,21 @@ async function open(browser, { authenticated = true, role = "OWNER", paged = fal
     }
     if (endpoint === "me") return route.fulfill({ status: state.authenticated ? 200 : 401,
       json: { ...fixture.me, role: state.role } });
+    if (endpoint === "services" && route.request().method() === "POST") {
+      const body = route.request().postDataJSON();
+      state.productCreates.push(body);
+      if (state.productGate) await state.productGate.promise;
+      const productId = "00000000-0000-4000-8000-000000000044";
+      state.services.push({ ...body, id: productId, category_name_ar: fixture.categories[0].name_ar,
+        enabled: false, revision: 1 });
+      return route.fulfill({ json: { id: productId, enabled: false } });
+    }
+    if (endpoint === "services") return route.fulfill({ json: state.services });
     if (endpoint.startsWith("services/") && route.request().method() === "PATCH") {
       const body = route.request().postDataJSON();
       state.serviceWrites.push(body);
+      const editedId = endpoint.slice("services/".length);
+      state.services = state.services.map(item => item.id === editedId ? { ...item, ...body, revision: body.expected_revision + 1 } : item);
       return route.fulfill({ json: { ...body, revision: body.expected_revision + 1 } });
     }
     if (route.request().method() === "PATCH") return route.fulfill({ json: { ok: true } });
@@ -137,6 +150,37 @@ async function noOverflow(page, label) {
     assert.equal(state.serviceWrites[0].base_price_halalas, 1250);
     await page.getByText("41 ⭐", { exact: false }).first().waitFor();
     console.log("PASS native XTR order display and integer Stars editor; fractions rejected, SAR history preserved");
+    const productForm = page.locator("form").filter({ has: page.getByRole("button", { name: "تسجيل الخدمة", exact: true }) });
+    await productForm.getByLabel("التصنيف", { exact: true }).selectOption(id);
+    await productForm.getByLabel("اسم الخدمة", { exact: true }).fill("خدمة تلخيص إضافية");
+    await productForm.getByLabel("الاسم المختصر بالإنجليزية", { exact: true }).fill("new-summary-product");
+    await productForm.getByLabel("طريقة التنفيذ", { exact: true }).selectOption("summarize-text");
+    await productForm.getByLabel("السعر بالنجوم", { exact: true }).fill("19");
+    await productForm.getByLabel("سبب الإضافة", { exact: true }).fill("إضافة منتج تجريبي من اللوحة");
+    state.productGate = gate();
+    await productForm.evaluate(form => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await page.getByRole("button", { name: "جارٍ تسجيل الخدمة…", exact: true }).waitFor();
+    assert.equal(await page.getByRole("button", { name: "جارٍ تسجيل الخدمة…", exact: true }).isDisabled(), true);
+    state.productGate.release();
+    const added = page.locator("details").filter({ has: page.getByText("خدمة تلخيص إضافية", { exact: true }) });
+    await added.waitFor();
+    assert.equal(state.productCreates.length, 1);
+    assert.deepEqual(state.productCreates[0].input_schema, { max_characters: 4000 });
+    assert.equal(state.productCreates[0].processor_key, "summarize-text");
+    assert.equal(state.productCreates[0].base_price_stars, 19);
+    assert.equal("enabled" in state.productCreates[0], false);
+    await added.evaluate(element => { element.open = true; });
+    await added.getByLabel("اسم المنتج", { exact: true }).fill("تلخيص باسم محدّث");
+    await added.getByLabel("السعر بالنجوم", { exact: true }).fill("23");
+    await added.getByLabel("سبب التعديل", { exact: true }).fill("تعديل اسم وسعر المنتج لاحقًا");
+    await added.getByRole("button", { name: "حفظ التعديل", exact: true }).click();
+    await page.getByText("تلخيص باسم محدّث", { exact: true }).waitFor();
+    assert.equal(state.serviceWrites.at(-1).base_price_stars, 23);
+    assert.equal(state.serviceWrites.at(-1).name_ar, "تلخيص باسم محدّث");
+    console.log("PASS product creation with known executor, duplicate-submit guard and later name/Stars-price edits");
     assert.deepEqual(errors, []);
     await context.close();
 

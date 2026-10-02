@@ -38,6 +38,7 @@ async def persist_payment_update(connection, bot_id, update):
 
 async def process_payment_inbox(
     connection, bot_id, *, allow_fulfillment, service_slug: str | None = None,
+    processor_key: str | None = None,
 ) -> int:
     processed = 0
     # One row/transaction avoids rolling back earlier receipts when a later event fails.
@@ -64,6 +65,7 @@ async def process_payment_inbox(
                     else:
                         await accept_star_payment(
                             *args, allow_fulfillment=allow_fulfillment, service_slug=service_slug,
+                            processor_key=processor_key,
                         )
             except StarsMismatch:
                 logger.warning("star_receipt_rejected")
