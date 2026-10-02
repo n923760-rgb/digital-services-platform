@@ -9,7 +9,6 @@ from platform_core.stars_payments import (
     confirm_star_refund,
 )
 
-
 logger = logging.getLogger(__name__)
 
 
