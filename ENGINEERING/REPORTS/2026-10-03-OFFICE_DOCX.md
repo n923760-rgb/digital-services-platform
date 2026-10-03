@@ -32,6 +32,11 @@ Changed files: office_docx.py, test_office_docx.py, docs/OFFICE-DOCX.md and this
 Local snapshot is isolated from other work; repository writes use the GitHub API.
 QA fixtures are synthetic and excluded from commits, along with rendered previews.
 
+Initial source a6d7a1a4d2b44967674664c88f808291f0bc5b4e triggered Foundation
+37127044926 and advisory 37127044943. Advisory and web passed; Python stopped at
+Ruff with import ordering and two nested-context style findings. Corrected those
+four findings in the follow-up commit; final-source CI must be checked independently.
+
 ## Verification
 
 Available: repository API, local Python 3.12.14, packaged document converter and PNG

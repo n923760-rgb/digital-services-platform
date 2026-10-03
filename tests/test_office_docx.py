@@ -1,16 +1,16 @@
 """Pure executor checks, collected by pytest and runnable without third-party deps."""
 
+import unittest
 from dataclasses import replace
 from hashlib import sha256
 from io import BytesIO
-import unittest
 from unittest.mock import patch
 from xml.etree import ElementTree as ET
 from zipfile import ZipFile
 
 from platform_core.office_docx import (
-    MAX_BLOCK_CHARS,
     MAX_BLOCKS,
+    MAX_BLOCK_CHARS,
     MAX_TEXT_CHARS,
     MAX_TITLE_CHARS,
     MIME_TYPE,
@@ -122,9 +122,8 @@ class OfficeDocxTests(unittest.TestCase):
     def test_rejects_blank_title_body_and_empty_blocks(self):
         for candidate in [replace(BASE, title=" \n"), replace(BASE, blocks=()),
                           replace(BASE, blocks=(OfficeBlock(" \t\n"),))]:
-            with self.subTest(candidate=candidate):
-                with self.assertRaises(InvalidOfficeInput):
-                    render_docx(candidate)
+            with self.subTest(candidate=candidate), self.assertRaises(InvalidOfficeInput):
+                render_docx(candidate)
 
     def test_rejects_unknown_template_kind_and_direction(self):
         candidates = [replace(BASE, template_id="custom"),
@@ -172,9 +171,9 @@ class OfficeDocxTests(unittest.TestCase):
                 render_docx(replace(BASE, blocks=(OfficeBlock(text, "heading"),)))
 
     def test_output_failure_returns_no_partial_artifact(self):
-        with patch("platform_core.office_docx.MAX_OUTPUT_BYTES", 1):
-            with self.assertRaises(OfficeOutputLimitExceeded):
-                render_docx(BASE)
+        with (patch("platform_core.office_docx.MAX_OUTPUT_BYTES", 1),
+              self.assertRaises(OfficeOutputLimitExceeded)):
+            render_docx(BASE)
 
     def test_alternating_scripts_at_limit_preserve_content(self):
         text = "أA" * (MAX_BLOCK_CHARS // 2)

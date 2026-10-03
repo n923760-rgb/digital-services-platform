@@ -1,10 +1,10 @@
 """Bounded, local text-to-DOCX formatting; no intake, storage or paid integration."""
 
+import re
+import unicodedata
 from dataclasses import dataclass
 from hashlib import sha256
 from io import BytesIO
-import re
-import unicodedata
 from xml.etree import ElementTree as ET
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
