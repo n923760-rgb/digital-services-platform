@@ -64,7 +64,7 @@ class SyntheticTelegramSession(BaseSession):
             # Existing disposable-suite refunds must not be confirmed by this fixture.
             return False
         if not isinstance(method, (SendMessage, SendInvoice)):
-            raise AssertionError(f"Unexpected offline API method: {type(method).__name__}")
+            raise TypeError(f"Unexpected offline API method: {type(method).__name__}")
         text = method.text if isinstance(method, SendMessage) else "Synthetic invoice"
         if text.startswith("ملخص محلي — الطلب"):
             self.result_attempts += 1
