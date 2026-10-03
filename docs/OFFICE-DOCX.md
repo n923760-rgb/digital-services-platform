@@ -23,8 +23,19 @@ The executor uses only Python's standard library. It creates native text, styles
 line breaks and tabs, with Letter portrait pages, one-inch margins and Arial.
 There are no macros, fields, hyperlinks, media, external relationships or personal
 metadata. Submitted URLs remain literal text. XML-like input is escaped, never
-interpreted as document markup. Unicode is preserved; CRLF/CR line endings become LF.
+interpreted as document markup. Visible Unicode is preserved; CRLF/CR line endings become LF.
 The same input produces the same ZIP bytes on the same Python/zlib toolchain.
+
+For Latin runs in RTL paragraphs, the DOCX contains balanced Unicode LRE/PDF
+formatting marks (U+202A/U+202C). This fixes the observed converter misordering of
+angle brackets, quoted text, dates and percentages. Trailing whitespace stays
+outside each embedding; embeddings never span a tab or explicit line break.
+Original request strings are not mutated. Copied/extracted DOCX text includes the
+invisible marks, so it is not byte-for-byte equal to the submitted text. Keep the
+original request as the authoritative text. For logical comparison only, remove
+U+202A/U+202C from extracted text. Input embeddings, overrides and isolates
+(U+202A..U+202E and U+2066..U+2069) are rejected with `unsupported_bidi_control`;
+this prevents submitted controls from escaping the formatter's embeddings.
 
 Development bounds: title/heading 200 characters, 200 blocks, paragraph 10,000
 characters, total title/body 40,000 characters and ZIP output 2 MiB. These are input
@@ -36,13 +47,14 @@ Unexpected faults propagate. A future channel boundary must classify/log sanitiz
 failures without text, handle storage/delivery separately and avoid payment capture
 before an actual delivery receipt.
 
-Local verification uses Python 3.12.14 and synthetic inputs. Sixteen unittest tests
+Local verification uses Python 3.12.14 and synthetic inputs. Eighteen unittest tests
 also run under the existing pytest suite without new dependencies. Native package
-content preservation and ZIP checks pass. Arabic alignment and multipage layout were
-rendered and inspected, but punctuation around mixed RTL/LTR XML-like text still
-renders incorrectly in the available converter. Visual qualification is incomplete;
-do not deliver this experimental output to paying customers or claim universal Word
-compatibility. Real Microsoft Word desktop/mobile editing and live bot delivery are
-not tested. The [task report](../ENGINEERING/REPORTS/2026-10-03-OFFICE_DOCX.md) records
+visible-content preservation and ZIP checks pass. The mixed punctuation regression,
+Arabic alignment and multipage layout pass on the inspected synthetic fixtures in
+the bundled LibreOffice renderer. Python-docx open/edit/save/reopen also preserves
+the fixture's visible content. These results do not qualify a paying customer
+service or universal Word compatibility: real Microsoft Word desktop/mobile
+editing and live bot delivery are not tested. The
+[task report](../ENGINEERING/REPORTS/2026-10-03-OFFICE_DOCX.md) records
 the exact scope and evidence. The canonical plan remains the existing
 [roadmap](../ENGINEERING/MASTER_ROADMAP.md).

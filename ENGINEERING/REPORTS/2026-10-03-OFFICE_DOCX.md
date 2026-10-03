@@ -21,7 +21,7 @@ This is separate from the earlier Office deferral described in draft PR 45.
 
 FACT: new independent standard-library formatter in platform_core, fixed template,
 immutable bounded input, editable DOCX bytes and SHA-256, sanitized input failures,
-native styles/RTL runs and deterministic ZIP timestamps. No file paths or metadata
+native styles/RTL runs, balanced Latin embeddings and deterministic ZIP timestamps. No file paths or metadata
 are derived from customer input. No dependencies, migrations, queues or framework.
 Existing bot, financial history, service registry and flags are unchanged.
 PR 45 edits the roadmap/trial guide; neither is modified here. This task report
@@ -39,6 +39,34 @@ four findings in the follow-up commit. At 0f295c2b72672ff92a625f6928774f8b0e9359
 Foundation 37127250460 still rejected the ordering of MAX_BLOCK_CHARS/MAX_BLOCKS;
 corrected it to the exact Ruff diagnostic. Final-source CI must be checked independently.
 
+At source 8dfb4abc3057bc72bb71d5eb20b849495fe1c2d5, Foundation runs
+37127382847 (PR) and 37127380564 (push) passed Python, web and Compose. Advisory
+runs 37127382845 and 37127380567 passed. Python collected 182 tests plus 24
+subtests. The PR stayed draft because the mixed punctuation visual gate failed.
+Those results are historical and do not prove this follow-up source passes CI.
+
+## Mixed punctuation correction
+
+FACT: owner continued the requested quality work with “تمام كمل”. The observed
+misordering of `<tag> & "quote".`, 2026-10-03 and 12.5% is the correction trigger.
+Removing run direction attributes, using a single run, and retaining native w:dir
+embedding did not change the rendered punctuation. Unicode LRE/PDF embeddings
+around Latin text in RTL paragraphs fixed these inspected cases. Native w:dir
+wrappers were removed; ordinary runs are readable/editable through python-docx.
+Trailing whitespace stays outside embeddings, and tabs/line breaks separate them.
+
+CONTRACT CHANGE: output contains invisible U+202A/U+202C formatting marks; raw
+extracted/copied text is no longer exactly the submitted string. Original request
+strings remain unchanged. Logical comparison strips only these generated marks.
+Input embeddings/overrides/isolates are rejected with a sanitized code, including
+unbalanced controls; this is documented rather than silently rewriting input.
+No new runtime dependency, agent, provider or activation is introduced.
+
+Reference: [Microsoft's w:dir specification](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.bidirectionalembedding)
+describes markup as equivalent to LRE/RLE and PDF characters. The implementation
+uses explicit LRE/PDF because the available native converter ignored w:dir for
+these cases. This is a measured renderer result, not a universal application claim.
+
 ## Verification
 
 Available: repository API, local Python 3.12.14, packaged document converter and PNG
@@ -46,27 +74,34 @@ inspection. No project locked environment, local pytest/Ruff, PostgreSQL or Comp
 
 | Check | Actual result |
 | --- | --- |
-| Python unittest discovery on changed module | PASS, 16 tests |
+| Python unittest discovery on changed module | PASS, 18 tests |
 | Arabic/mixed text, controls, blank/overlimit input, output failure | PASS in unit checks |
-| Exact text order, spaces, tabs, newline normalization, passive ZIP and digest | PASS |
+| Visible text order, spaces, tabs, newline normalization, passive ZIP and digest | PASS; generated direction marks excluded from logical comparison |
 | Alternating scripts and 40,000-character aggregate boundary | PASS |
-| Synthetic native DOCX renders | PASS conversion, 1 mixed page and 3 long pages |
-| Arabic alignment, line wrapping, four page images inspected | PASS for these fixtures |
-| Mixed XML-like angle brackets/quotes visual order | FAIL; converter still misorders punctuation despite native text preservation |
-| Complete visual gate | BLOCKED pending punctuation fix and reinspection |
+| Synthetic native DOCX renders | PASS conversion, 1 mixed page, 3 long pages, 1 punctuation page and 1 edited punctuation page |
+| Arabic alignment, line wrapping, all six page images inspected | PASS for these fixtures; edited paragraph uses editor's default alignment |
+| Mixed angle brackets/quotes, email, URL, identifier, date and percentage order | PASS on seven-case punctuation fixture and representative mixed fixture |
+| Python-docx open/edit/save/reopen | PASS, existing visible content retained and appended paragraph readable |
+| Native Word compatibility gate | NOT RUN; no universal compatibility claim |
 | Real Word desktop/mobile edit and Telegram artifact delivery | NOT RUN |
 | Full locked pytest, Ruff, dependency checks, DB/Compose | NOT RUN locally; existing exact-source CI pending |
 
 Command: `PYTHONPATH=packages/python python -m unittest discover -s tests -p test_office_docx.py -q`
 using the bundled Python 3.12.14. Renderer: bundled documents/render_docx.py, then
 every page PNG opened. Logical `w:jc=start` corrected the initial Arabic alignment
-failure. Native opposite-direction runs/embedding preserve strings but do not yet
-qualify all mixed punctuation rendering. No paid or production safety claim follows.
+failure. The follow-up's bounded Unicode embeddings corrected the inspected mixed
+punctuation regression. No paid or production safety claim follows.
+
+Synthetic DOCX SHA-256: mixed
+`2b2ede4caf6c1972aff0acf98619c413f7a21d003a5cb593afae40b9effcd211`, long
+`28f708da595c5157458a3b86ba984468364414de5d47f7b62a2be9c41170db21`, punctuation
+`705abd30623f9204ff73cb00bf1c73720314996fd5f08f0ba699c1d9b611c429`.
 
 ## Result and next bounded correction
 
-Experimental formatter and structural tests are implemented. Leave PR draft because
-the visual gate is incomplete. Correct mixed punctuation on the actual rendering path
-and re-render all affected samples before promoting the executor. After that,
+Experimental formatter, regression tests and observed punctuation correction are
+implemented. Keep PR draft until final-source CI and native Word compatibility
+are assessed. The six inspected pages pass the available renderer's visual gate.
+After that,
 private artifact ownership, expiry, cached delivery and actual Telegram receipts
 need their own bounded implementation; this module alone authorizes none of them.

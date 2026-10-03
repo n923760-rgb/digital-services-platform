@@ -59,6 +59,10 @@ def _validate_text(text: object, limit: int) -> None:
         raise InvalidOfficeInput("invalid_text_type")
     if len(text) > limit:
         raise InvalidOfficeInput("text_limit")
+    # The formatter owns balanced directional embeddings. Submitted embeddings,
+    # overrides and isolates could escape them or make copied text misleading.
+    if any(c in "\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069" for c in text):
+        raise InvalidOfficeInput("unsupported_bidi_control")
     # XML 1.0 permits tabs and line endings, but not C0 controls or surrogates.
     if any(not (c in "\t\n\r" or 0x20 <= ord(c) <= 0xD7FF
                 or 0xE000 <= ord(c) <= 0xFFFD or 0x10000 <= ord(c) <= 0x10FFFF)
@@ -157,16 +161,21 @@ def _paragraph(body: ET.Element, text: str, style: str, direction: str = "auto")
     # Logical alignment follows paragraph direction in modern Word and LibreOffice.
     _w(props, "jc", val="start")
     for segment, run_direction in _segments(text, direction):
-        # Preserve explicit embedding for opposite-direction text.
-        container = p
-        if run_direction != direction:
-            container = _w(p, "dir", val=run_direction)
-        run = _w(container, "r")
+        run = _w(p, "r")
         _w(_w(run, "rPr"), "rtl", val="1" if run_direction == "rtl" else "0")
         for token in re.split(r"([\t\n])", segment):
             if token in ("\t", "\n"):
                 _w(run, "tab" if token == "\t" else "br")
             elif token:
+                # w:dir is ignored by the qualified LibreOffice converter. Use
+                # equivalent balanced Unicode embeddings for Latin text in RTL
+                # paragraphs. Keep trailing spaces outside, and never span a
+                # tab or line break. These formatting marks are part of DOCX
+                # copied text; original request text remains unchanged.
+                if run_direction == "ltr" and direction == "rtl":
+                    content = token.rstrip()
+                    if content:
+                        token = "\u202a" + content + "\u202c" + token[len(content):]
                 element = _w(run, "t")
                 element.set("xml:space", "preserve")
                 element.text = token

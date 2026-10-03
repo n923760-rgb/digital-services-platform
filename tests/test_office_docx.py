@@ -35,7 +35,8 @@ def document_xml(artifact):
 
 def paragraph_text(element):
     return "".join("\n" if node.tag == f"{{{W_NS}}}br" else
-                   "\t" if node.tag == f"{{{W_NS}}}tab" else node.text or ""
+                   "\t" if node.tag == f"{{{W_NS}}}tab" else
+                   (node.text or "").replace("\u202a", "").replace("\u202c", "")
                    for node in element.iter()
                    if node.tag in {f"{{{W_NS}}}{tag}" for tag in ("t", "br", "tab")})
 
@@ -80,6 +81,31 @@ class OfficeDocxTests(unittest.TestCase):
                           for p in paragraphs], ["0", "0", "1"])
         self.assertTrue(all(p.find("w:pPr/w:jc", NS).get(f"{{{W_NS}}}val") == "start"
                             for p in paragraphs))
+
+    def test_mixed_punctuation_uses_balanced_embeddings_without_enclosing_breaks(self):
+        text = 'رموز <tag> & "quote".\nالتاريخ 2026-10-03\tالمبلغ 12.5% والطلب (INV-2026)'
+        request = replace(BASE, blocks=(OfficeBlock(text),))
+        p = document_xml(render_docx(request)).findall("w:body/w:p", NS)[1]
+        self.assertEqual(request.blocks[0].text, text)
+        self.assertEqual(paragraph_text(p), text)
+        tokens = [node.text for node in p.findall(".//w:t", NS)]
+        self.assertTrue(any('\u202a<tag> & "quote".\u202c' in token for token in tokens))
+        self.assertTrue(any('\u202a2026-10-03\u202c' in token for token in tokens))
+        for token in tokens:
+            self.assertEqual(token.count("\u202a"), token.count("\u202c"))
+            self.assertNotIn("\n", token)
+            self.assertNotIn("\t", token)
+        self.assertFalse(p.findall("w:dir", NS))
+        english = document_xml(render_docx(replace(BASE, blocks=(
+            OfficeBlock('English <tag> "quote".', direction="ltr"),
+        )))).findall("w:body/w:p", NS)[1]
+        self.assertNotIn("\u202a", ET.tostring(english, encoding="unicode"))
+
+    def test_rejects_submitted_directional_embeddings_overrides_and_isolates(self):
+        for char in "\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069":
+            with self.subTest(char=repr(char)), self.assertRaises(InvalidOfficeInput) as caught:
+                render_docx(replace(BASE, blocks=(OfficeBlock(f"private{char}ABC"),)))
+            self.assertEqual(caught.exception.code, "unsupported_bidi_control")
 
     def test_package_is_deterministic_hashed_and_has_only_passive_parts(self):
         first, second = render_docx(BASE), render_docx(BASE)
