@@ -12,13 +12,17 @@ from aiogram.client.session.base import BaseSession
 from aiogram.methods import (
     AnswerCallbackQuery,
     AnswerPreCheckoutQuery,
+    GetMe,
     RefundStarPayment,
+    SendDocument,
     SendInvoice,
     SendMessage,
 )
 from aiogram.types import (
+    BufferedInputFile,
     CallbackQuery,
     Chat,
+    Document,
     Message,
     MessageEntity,
     PhotoSize,
@@ -29,11 +33,12 @@ from aiogram.types import (
 )
 from platform_core.admin_auth import create_admin
 from platform_core.ledger import Balance, balance
+from platform_core.office_trial import OfficeTrial
 from platform_core.service_registry import create_category, create_service, update_service
 from platform_core.stars_inbox import persist_payment_update
 from platform_core.text_summary import SLUG, TEXT_INPUT_SCHEMA
 
-from apps.telegram_bot import customer_status, stars_payments, summary_ui, v0
+from apps.telegram_bot import customer_status, office_ui, stars_payments, summary_ui, v0
 
 TEXT = "تقدم المنصة خدمات رقمية للسوق السعودي. تحافظ المنصة على أسعار واضحة وسجل الدفع."
 TERMS = "شروط اصطناعية للاختبار فقط؛ لا تمثل شروط شراء حقيقية."
@@ -48,6 +53,8 @@ class SyntheticTelegramSession(BaseSession):
         self.messages = []
         self.result_attempts = 0
         self.fail_next_result = False
+        self.document_attempts = 0
+        self.fail_next_document = False
 
     async def close(self):
         pass
@@ -58,6 +65,28 @@ class SyntheticTelegramSession(BaseSession):
 
     async def make_request(self, bot, method, timeout=None):
         self.calls.append(method)
+        if isinstance(method, GetMe):
+            return User(id=bot.id, is_bot=True, first_name="Synthetic bot",
+                        username="synthetic_office_bot")
+        if isinstance(method, SendDocument):
+            if not isinstance(method.document, BufferedInputFile):
+                raise TypeError("Offline document delivery requires bounded in-memory bytes")
+            self.document_attempts += 1
+            if self.fail_next_document:
+                self.fail_next_document = False
+                raise OSError("synthetic-private-document-body")
+            response = Message(
+                message_id=len(self.messages) + 100, date=datetime.now(UTC),
+                chat=Chat(id=method.chat_id, type="private"),
+                from_user=User(id=bot.id, is_bot=True, first_name="Synthetic bot"),
+                document=Document(file_id="synthetic-docx", file_unique_id="synthetic-docx",
+                                  file_name=method.document.filename,
+                                  mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                  file_size=len(method.document.data)),
+                caption=method.caption, reply_markup=method.reply_markup,
+            )
+            self.messages.append(response)
+            return response
         if isinstance(method, (AnswerCallbackQuery, AnswerPreCheckoutQuery)):
             return True
         if isinstance(method, RefundStarPayment):
@@ -129,7 +158,7 @@ async def trial(monkeypatch):
 
 
 def incoming(trial, text=None, **fields):
-    entities = [MessageEntity(type="bot_command", offset=0, length=len(text))] if text and text.startswith("/") else None
+    entities = [MessageEntity(type="bot_command", offset=0, length=len(text.split(maxsplit=1)[0]))] if text and text.startswith("/") else None
     return Message(
         message_id=trial.sequence + 1, date=datetime.now(UTC),
         chat=Chat(id=trial.user.id, type="private"), from_user=trial.user,
@@ -311,3 +340,122 @@ async def test_offline_closed_checkout_routes_commands_media_and_private_scope(t
         trial.user.id,
     ) == 0
     assert "summary_handler_failed" not in caplog.text
+
+
+@pytest.fixture
+def office(trial, monkeypatch):
+    clock = SimpleNamespace(now=100.0)
+    cache = OfficeTrial(clock=lambda: clock.now)
+    trial.settings.telegram_orders_enabled = False
+    trial.settings.telegram_stars_enabled = False
+    trial.settings.office_trial_enabled = True
+    trial.settings.office_trial_user_ids = [trial.user.id, trial.user.id + 1]
+    trial.settings.office_trial_ttl_seconds = 60
+    monkeypatch.setattr(office_ui, "get_settings", lambda: trial.settings)
+    monkeypatch.setattr(office_ui, "trial", cache)
+    trial.clock, trial.cache = clock, cache
+    return trial
+
+
+async def assert_office_unpaid(office):
+    assert calls(office, SendInvoice) == []
+    assert calls(office, RefundStarPayment) == []
+    assert await office.db.fetchval(
+        "SELECT count(*) FROM users WHERE telegram_user_id=$1", office.user.id,
+    ) == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("scenario", ["success", "uncertain_delivery"])
+async def test_offline_word_dispatch_receipt_replay_and_explicit_resend(office, scenario, caplog):
+    payload = 'تقرير العمل\nنص عربي وEnglish والطلب INV-2026 والتاريخ 2026-10-03.'
+    office.session.fail_next_document = scenario == "uncertain_delivery"
+    update = await feed(office, message=incoming(
+        office, "/word@synthetic_office_bot " + payload,
+    ))
+    result = office.cache._files[office.user.id]
+    first_call = calls(office, SendDocument)[0]
+    assert first_call.chat_id == office.user.id and first_call.protect_content is True
+    assert first_call.document.filename == "document.docx"
+    assert first_call.document.data == result.artifact.content
+    assert "تجريبي" in first_call.caption
+    assert result.delivery_state == ("uncertain" if scenario == "uncertain_delivery" else "delivered")
+    if scenario == "uncertain_delivery":
+        assert result.delivered_message_id is None
+        assert "تعذر تأكيد" in office.session.messages[-1].text
+        assert "office_delivery_uncertain" in caplog.text
+    else:
+        assert result.delivered_message_id == office.session.messages[-1].message_id
+        assert office.session.messages[-1].document.mime_type == result.artifact.mime_type
+
+    await v0.dispatcher.feed_update(office.bot, update)
+    assert len(calls(office, SendDocument)) == 1
+    assert office.cache._files[office.user.id].expires_at == result.expires_at
+    await press(office, office.session.messages[-1], f"office:get:{result.token}")
+    assert len(calls(office, SendDocument)) == 2
+    assert calls(office, SendDocument)[-1].document.data == first_call.document.data
+    delivered = office.cache._files[office.user.id]
+    assert delivered.delivery_state == "delivered"
+    assert delivered.delivered_message_id == office.session.messages[-1].message_id
+    assert "synthetic-private-document-body" not in caplog.text
+    assert payload not in caplog.text
+    assert "summary_handler_failed" not in caplog.text
+    await assert_office_unpaid(office)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reason", ["disabled", "not_allowlisted", "group", "wrong_chat"])
+async def test_offline_word_dispatch_denies_intake_without_files_or_payment(office, reason, caplog):
+    incoming_message = incoming(office, "/word عنوان\nنص تجريبي")
+    if reason == "disabled":
+        office.settings.office_trial_enabled = False
+    elif reason == "not_allowlisted":
+        office.settings.office_trial_user_ids = []
+    else:
+        incoming_message = incoming_message.model_copy(update={
+            "chat": Chat(id=-12345 if reason == "group" else office.user.id + 1,
+                         type="group" if reason == "group" else "private"),
+        })
+    await feed(office, message=incoming_message)
+    assert office.cache._files == {}
+    assert calls(office, SendDocument) == []
+    assert "summary_handler_failed" not in caplog.text
+    await assert_office_unpaid(office)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reason", ["foreign_owner", "expired", "replaced", "disabled"])
+async def test_offline_word_dispatch_rechecks_retrieval_permissions(office, reason, caplog):
+    await feed(office, message=incoming(office, "/word عنوان\nنص تجريبي"))
+    result = office.cache._files[office.user.id]
+    response = office.session.messages[-1]
+    if reason == "foreign_owner":
+        office.user = office.user.model_copy(update={"id": office.user.id + 1})
+        # Model a copied button in the other allowlisted owner's private chat.
+        response = response.model_copy(update={"chat": Chat(id=office.user.id, type="private")})
+    elif reason == "expired":
+        office.clock.now += 60
+    elif reason == "replaced":
+        await feed(office, message=incoming(office, "/word عنوان جديد\nنص جديد"))
+    else:
+        office.settings.office_trial_enabled = False
+    before = len(calls(office, SendDocument))
+    await press(office, response, f"office:get:{result.token}")
+    assert len(calls(office, SendDocument)) == before
+    assert calls(office, AnswerCallbackQuery)[-1].show_alert is True
+    assert "summary_handler_failed" not in caplog.text
+    await assert_office_unpaid(office)
+
+
+@pytest.mark.asyncio
+async def test_offline_word_dispatch_help_and_invalid_text_do_not_reach_checkout(office, caplog):
+    await feed(office, message=incoming(office, "/word"))
+    assert "4,000" in office.session.messages[-1].text
+    assert "لا تكتب أو تعيد صياغة" in office.session.messages[-1].text
+    for payload in ("عنوان", "أ" * 4001, "عنوان\nprivate\u202e"):
+        await feed(office, message=incoming(office, "/word " + payload))
+    assert office.cache._files == {}
+    assert calls(office, SendDocument) == []
+    assert "private" not in caplog.text
+    assert "summary_handler_failed" not in caplog.text
+    await assert_office_unpaid(office)

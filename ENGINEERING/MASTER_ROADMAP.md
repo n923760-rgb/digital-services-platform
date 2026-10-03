@@ -109,3 +109,37 @@ Historical 2026-10-02 decision: owner chose “لاحقًا، أكمل تجرب�
 At the initial inspection on 2026-10-02, main was 1d948707fa55d144d435dc971247c5c8c127a95f after PR #44 and no PRs were open. On 2026-10-03 the same main and central reference 641e4f9e45da109257ba1f38752b94604c2e4531 were verified; draft PRs #45 (this runbook) and #46 (Word experiment) are open. Historical exact-main Foundation/advisory results were green; they do not prove a real bot journey.
 The bounded continuation supplies an [Arabic isolated trial runbook](../docs/TELEGRAM-TRIAL.md) for the selected direct bot: separate Compose project/data, owner-configured test token, billing/activation off, supported-command/unsupported-input checks and optional draft-only administration. It defines subsequent live-payment gates without enabling them.
 Initial preparation used GitHub API plus a local shell without Docker or a connected host. Initial 2026-10-03 answers: “تجهيز البوت الحالي وتجربته قبل الإطلاق”, followed by “على سيرفر تجريبي؛ Docker متوفر”. The owner later clarified “ما عندي حاليا تجريبي فيه طريق أخرى” and accepted continuing without a server using existing GitHub Actions. The latest clarification controls: no currently available trial environment is assumed. Current assistant capabilities are repository API and existing external CI only; no SSH/runtime connection is available. Docker availability is owner-reported, not remote execution evidence. Actual deployment, Telegram authentication, paid result/refund and recovery remain NOT RUN. PR #45's runbook was qualified and merged; current main is verified at 40971fb6d6c894ed2c6913f8e3bb454c0f8c21fa/tree 2747349833216d768541a5b97dd132f6c55bf2a4. The bounded continuation adds real-dispatcher/typed-SDK acceptance with synthetic Telegram transport and disposable PostgreSQL: selected product, terms/invoice, owner/stale-price checkout, persisted receipt, direct delivery, duplicate replay and uncertain-send recovery, plus disabled/private input routing. [Offline qualification report](REPORTS/2026-10-03-OFFLINE_BOT_ACCEPTANCE.md). Exact-source results belong in its PR body. Actual server/bot qualification resumes only when an approved environment is available. No real billing, production migration, new processor/provider or PR #46 merge is authorized by this bounded continuation.
+
+
+## 14. Current Office priority and explicit engineering merge
+
+Latest owner direction on 2026-10-03: “تمام نكمل ابي حاليا خبير محترف برامج أوفيس ثم نكمل الخدمات الأخرى راجع مستودع المشروع في قيت هوب تمام”.
+The current review explained that PR #46 implements local Arabic DOCX formatting,
+not generative writing or general Office expertise. The owner then explicitly
+instructed “ادمج و كمل بدون توقف”. This supersedes the earlier draft-only merge
+restriction for this named PR; it authorizes qualified engineering merge and
+continuing the existing Word trial. It does not authorize deployment, billing,
+a paid model subscription or unbounded Office features.
+
+Starting main was b2fb384da5bb5914619c4b76a5c6610080b05518/tree
+f4d32373273473945e1719ca58032c475c6865ad; Office head was
+695ec6eb0aadd1b46bed5d16a456b838157f8301/tree c2c36c0c626ce15500990e4f012887e64f628ad7.
+Main's PR #45/#47 files and Office's 15 files were disjoint; preserve the runbook,
+canonical roadmap and all summary/Stars acceptance cases. Continue the same
+Office PR with a two-parent, data-preserving branch update, offline Word routing
+qualification and reconciled handoff. No migrations, dependencies, runtime
+provider or new product executor is added in this qualification round.
+[Office qualification report](REPORTS/2026-10-03-OFFICE_MERGE_QUALIFICATION.md).
+Exact final source, CI and merge identity belong in PR #46.
+
+Current capabilities: repository API plus external CI; no local shell, Word
+renderer/client or connected trial server. The latest owner clarification still
+means no current trial environment. Real Telegram/Word desktop/mobile acceptance
+remains NOT RUN. Office/payment/activation flags remain off by default.
+
+The required question about the actual Office trigger and first professional task
+has been asked, with no selecting answer yet. Do not infer customer demand,
+provider/model, budget, quality acceptance or Excel/PowerPoint scope from the merge
+instruction. The immediate independent work is qualify/merge the existing Word
+experiment. The next product increment is one owner-selected Word task with
+explicit acceptance criteria; other services remain deferred.
