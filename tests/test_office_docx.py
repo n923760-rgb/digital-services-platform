@@ -9,8 +9,8 @@ from xml.etree import ElementTree as ET
 from zipfile import ZipFile
 
 from platform_core.office_docx import (
-    MAX_BLOCKS,
     MAX_BLOCK_CHARS,
+    MAX_BLOCKS,
     MAX_TEXT_CHARS,
     MAX_TITLE_CHARS,
     MIME_TYPE,

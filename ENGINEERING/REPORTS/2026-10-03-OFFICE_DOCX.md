@@ -35,7 +35,9 @@ QA fixtures are synthetic and excluded from commits, along with rendered preview
 Initial source a6d7a1a4d2b44967674664c88f808291f0bc5b4e triggered Foundation
 37127044926 and advisory 37127044943. Advisory and web passed; Python stopped at
 Ruff with import ordering and two nested-context style findings. Corrected those
-four findings in the follow-up commit; final-source CI must be checked independently.
+four findings in the follow-up commit. At 0f295c2b72672ff92a625f6928774f8b0e9359f4,
+Foundation 37127250460 still rejected the ordering of MAX_BLOCK_CHARS/MAX_BLOCKS;
+corrected it to the exact Ruff diagnostic. Final-source CI must be checked independently.
 
 ## Verification
 
