@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from aiogram.filters import CommandObject
-from aiogram.types import CallbackQuery, Chat, Message, User
+from aiogram.types import CallbackQuery, Chat, ErrorEvent, Message, Update, User
 from platform_core.config import Settings
 from platform_core.office_trial import OfficeTrial
 
@@ -205,3 +205,27 @@ async def test_expiry_during_accepted_send_does_not_ack_newer_result(setup_trial
     assert env.trial._files[42].request_id == 11
     assert env.trial._files[42].delivery_state == "pending"
     assert env.trial._files[42].delivered_message_id is None
+
+
+@pytest.mark.asyncio
+async def test_unexpected_delivery_fault_propagates_and_releases_claim(setup_trial, caplog):
+    env = setup_trial
+    env.bot.send_document.side_effect = RuntimeError("private-unexpected-response")
+    with pytest.raises(RuntimeError):
+        await office_ui.create(message(), env.bot, PAYLOAD)
+    assert env.trial._files[42].delivery_state == "uncertain"
+    assert "office_delivery_failed:RuntimeError" in caplog.text
+    assert "private-unexpected-response" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_global_word_fault_notice_is_unpaid_and_sanitized(setup_trial, caplog):
+    env = setup_trial
+    env.bot.send_message = AsyncMock()
+    event = ErrorEvent(update=Update(update_id=1, message=message()),
+                       exception=RuntimeError("private-unexpected-response"))
+    assert await v0.errors(event, env.bot) is True
+    env.bot.send_message.assert_awaited_once()
+    text = env.bot.send_message.await_args.args[1]
+    assert "لا يوجد دفع" in text and "/orders" not in text
+    assert "private-unexpected-response" not in caplog.text

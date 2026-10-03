@@ -83,9 +83,7 @@ async def deliver(message, bot, owner_id, token, current_policy, explicit_retry=
                      reply_markup=retry_button(token))
     except Exception as exc:
         logger.error("office_delivery_failed:%s", type(exc).__name__)
-        await notice(message, "تعذر تأكيد تسليم الملف. أعد المحاولة من زر إعادة الإرسال؛ "
-                     "قد تصلك نسخة مكررة. لا يوجد دفع لهذه التجربة.",
-                     reply_markup=retry_button(token))
+        raise
     finally:
         # Also releases a cancelled send. Cancellation itself still propagates.
         try:
@@ -126,8 +124,7 @@ async def create(message, bot, payload):
         return
     except Exception as exc:
         logger.error("office_generation_failed:%s", type(exc).__name__)
-        await notice(message, "تعذر إنشاء الملف. لم تُسجل أي عملية دفع؛ جرّب لاحقًا.")
-        return
+        raise
     await deliver(message, bot, message.from_user.id, result.token, current_policy)
 
 

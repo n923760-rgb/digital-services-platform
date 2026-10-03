@@ -65,6 +65,13 @@ Final exact-head Foundation (Python/web/Compose) and dependency-advisory evidenc
 will be attached to PR #46 after the source is committed; do not infer a pass from
 the formatter parent or from these local checks.
 
+Initial trial commit `356f5a21a13b685d7ace11c509dcf4d15731ea8f` failed Ruff BLE001
+at two broad boundary catches. The correction preserves sanitized logging but
+re-raises unexpected faults to the existing global handler, whose Word-command
+notice now states the unpaid/uncertain result without directing it to checkout.
+Added actual-model regression tests for propagation, claim release and that notice;
+CI rules were not relaxed. The corrected exact head requires fresh full checks.
+
 ## Next and limitations
 
 Follow `docs/CODEX-HANDOFF.md`: one approved isolated unpaid runtime/real-client

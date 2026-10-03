@@ -125,7 +125,13 @@ async def errors(event: ErrorEvent, bot: Bot):
     # Financial receipts remain persisted; do not log exception bodies or customer text.
     if event.update.message and event.update.message.chat.type == "private":
         try:
-            await bot.send_message(event.update.message.chat.id, "تعذر إكمال العملية. تابع /orders أو /paysupport؛ لا تدفع مرة أخرى لهذا الطلب.")
+            incoming = event.update.message
+            command = (incoming.text or "").split(maxsplit=1)[0:1]
+            office = bool(command and command[0].split("@", 1)[0].lower() == "/word")
+            text = ("تعذر إكمال تجربة Word أو تأكيد تسليمها. لا يوجد دفع؛ "
+                    "إعادة المحاولة قد تنتج نسخة مكررة." if office else
+                    "تعذر إكمال العملية. تابع /orders أو /paysupport؛ لا تدفع مرة أخرى لهذا الطلب.")
+            await bot.send_message(incoming.chat.id, text)
         except TelegramAPIError:
             logger.warning("summary_error_notice_unavailable")
     return True
