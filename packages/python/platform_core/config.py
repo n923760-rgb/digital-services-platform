@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, PositiveInt
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     pdf_sandbox_root: str = ""
     backup_status_path: str = ""
     telegram_bot_token: str = ""
+    office_trial_enabled: bool = False
+    office_trial_user_ids: list[PositiveInt] = Field(default_factory=list, max_length=20)
+    office_trial_ttl_seconds: int = Field(default=900, ge=60, le=3600)
     telegram_orders_enabled: bool = False
     telegram_stars_enabled: bool = False
     telegram_payment_terms: str = Field(default="", max_length=2000)

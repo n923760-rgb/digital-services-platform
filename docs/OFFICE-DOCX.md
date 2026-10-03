@@ -1,8 +1,9 @@
 # Local Arabic Word executor
 
 This experimental module formats supplied text into editable DOCX bytes. It is not
-registered in the service catalog or wired to Telegram, storage, orders or payments.
-It is not a qualified customer service yet.
+registered in the service catalog or connected to durable storage, orders or payments.
+An optional [private unpaid Telegram trial](OFFICE-TRIAL.md) wraps this unchanged
+executor. Neither the formatter nor the trial is a qualified customer service yet.
 
 `platform_core.office_docx.render_docx(OfficeDocument(...))` accepts an immutable
 title, tuple of `OfficeBlock` values and the fixed `formal-ar-v1` template. Blocks

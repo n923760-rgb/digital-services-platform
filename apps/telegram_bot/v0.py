@@ -1,4 +1,4 @@
-"""Minimal first-channel entrypoint: direct text summaries, no Redis/ARQ or storage runtime."""
+"""Direct summary entrypoint with an opt-in unpaid Word trial; no worker runtime."""
 
 import asyncio
 import logging
@@ -8,7 +8,7 @@ from pathlib import Path
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.exceptions import TelegramAPIError
-from aiogram.filters import Command, CommandStart
+from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.types import CallbackQuery, ErrorEvent, Message
 from aiogram.utils.token import TokenValidationError
 from platform_core.config import get_settings
@@ -21,7 +21,7 @@ from platform_core.summary_orders import (
 )
 from platform_core.text_summary import SLUG
 
-from apps.telegram_bot import customer_status, stars_payments, summary_ui
+from apps.telegram_bot import customer_status, office_ui, stars_payments, summary_ui
 
 logger = logging.getLogger(__name__)
 dispatcher = Dispatcher()
@@ -92,6 +92,16 @@ async def cancel(message: Message):
         await message.answer("ألغي العرض غير المدفوع." if changed else "لا يوجد عرض غير مدفوع للإلغاء.")
 
 
+@dispatcher.message(Command("word"), F.text)
+async def word(message: Message, bot: Bot, command: CommandObject):
+    await office_ui.create(message, bot, command.args or "")
+
+
+@dispatcher.callback_query(F.data.startswith("office:get:"))
+async def word_resend(callback: CallbackQuery, bot: Bot):
+    await office_ui.resend(callback, bot)
+
+
 @dispatcher.message(F.text)
 async def text(message: Message):
     if private(message):
@@ -123,6 +133,7 @@ async def errors(event: ErrorEvent, bot: Bot):
 
 async def heartbeat():
     while True:
+        await asyncio.to_thread(office_ui.trial.purge_expired)
         await asyncio.to_thread(Path("/tmp/bot-heartbeat").write_text, "ready", encoding="ascii")
         await asyncio.sleep(15)
 

@@ -24,6 +24,8 @@ Check `docker compose ps` and `docker compose logs api`. Alembic completes befor
 
 For Telegram, set a valid `TELEGRAM_BOT_TOKEN` in the secret store/untracked `.env`, then use `docker compose --profile telegram up -d --build telegram-bot`. The default entrypoint is `apps.telegram_bot.v0`: /services, /summary, /orders, /cancel, /terms and /paysupport. Checkout stays off without qualified configuration; do not start two pollers for one token.
 
+The optional [private unpaid Word trial](docs/OFFICE-TRIAL.md) adds `/word` for allowlisted users only. It is disabled by default, formats supplied text without generating content, and requires an approved isolated bot/database for runtime qualification. It does not add a catalog product or enable payments. [Codex handoff](docs/CODEX-HANDOFF.md) records the bounded next step.
+
 Initialize an OWNER through `docker compose exec -it api python -m platform_core.admin_bootstrap`. Configure the owner-selected price using `python -m platform_core.summary_setup --price-stars <owner-value> --reason '<reason>'` inside the API container. Credentials are entered interactively. `--activate` also requires SERVICE_ACTIVATION_ENABLED; checkout requires both Telegram flags and actual terms/support. This change selects no live price or launch configuration.
 
 Before switching an existing stack, resolve outstanding legacy orders, then stop its bot/worker/API/web/Caddy with `docker compose -f docker-compose.legacy.yml stop telegram-bot worker api web caddy`. The new bot refuses startup with outstanding legacy work. Project/database-volume names are preserved; never remove volumes to simplify architecture.
