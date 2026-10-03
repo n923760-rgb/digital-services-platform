@@ -1,8 +1,11 @@
 # Codex handoff: Word first
 
 Repository: `n923760-rgb/digital-services-platform`.
-Continue the existing draft PR #46 on `feat/office-docx-experiment`; do not start
-an overlapping feature branch, merge, deploy or activate payments implicitly.
+Office work is tracked in PR #46 on `feat/office-docx-experiment`.
+The latest owner instruction, “ادمج و كمل بدون توقف”, explicitly authorizes its
+engineering merge after exact-source qualification. Continue that same PR until
+merged; do not create overlapping work. Deployment and paid activation remain
+separate, unapproved actions.
 Re-fetch live main, PR head/tree and central governance before every change.
 This checkpoint was prepared against main
 `1d948707fa55d144d435dc971247c5c8c127a95f` and formatter parent
@@ -24,9 +27,12 @@ authorized the current private unpaid Word trial with “تمام عادي”, t
 finish/save it and continue in Codex. This authorizes this bounded experiment,
 not all desired future services, a provider subscription, production activation
 or guaranteed quality. Actual customer demand and launch readiness remain unknown.
-Draft PR #45 contains an earlier Office deferral in the roadmap. Do not silently
-overwrite that PR or create another roadmap: flag reconciliation against the later
-owner request during the next governed planning/review step.
+PR #45's trial guide and PR #47's offline bot acceptance are now merged.
+Preserve both when updating Office from main. The canonical roadmap records the
+later Office priority and explicit merge authority without erasing the historical
+deferral. The question about the first concrete professional Office task and its
+actual trigger has been asked; no answer selecting that task/provider/budget has
+yet been supplied. Continuing the existing trial does not choose them implicitly.
 
 ## Implemented versus desired
 
@@ -47,8 +53,14 @@ repeat those as new live runtime evidence.
 
 ## Next bounded step
 
-First review the exact-head CI and full diff. Then qualify one private, unpaid
-Word journey using an owner-approved isolated test bot/database and synthetic
+The current API-only continuation adds real-dispatcher offline Word acceptance
+to the existing synthetic SDK/disposable PostgreSQL tests. See the
+[merge qualification report](../ENGINEERING/REPORTS/2026-10-03-OFFICE_MERGE_QUALIFICATION.md)
+and PR #46 for the exact-head CI outcome; synthetic receipts are not actual
+Telegram delivery. No trial server is currently available.
+
+After the authorized engineering merge, qualify one private, unpaid Word journey
+using an owner-approved isolated test bot/database and synthetic
 non-sensitive text: help, generation, actual file receipt, resend, expiry, denied
 ownership and Arabic/English Word desktop/mobile opening/editing. Record actual
 versions, observations and failures. If the approved environment is unavailable,

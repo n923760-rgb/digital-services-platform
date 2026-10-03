@@ -74,10 +74,20 @@ retain bytes beyond cache cleanup; no immediate memory-wipe guarantee is made.
 
 ## Qualification still required
 
-Automated tests cover pure domain behavior and actual aiogram message models with
-synthetic provider I/O. Final exact-head CI evidence belongs in PR #46, not an
+Automated tests cover pure domain behavior, actual aiogram message models and
+real Dispatcher.feed_update routing with typed SDK responses over a no-network
+synthetic transport. Offline journeys cover /word help/intake, the bot username
+suffix, returned document receipts, message replay, uncertain sends/explicit
+resend, current flag/allowlist/private-chat checks and foreign/expired/replaced
+retrieval denial. They assert no invoice/refund calls or customer financial
+creation in disposable PostgreSQL. This is not live Telegram evidence.
+Final exact-head CI evidence belongs in PR #46, not an
 assumed pass from an earlier formatter revision. A real private-bot journey,
 Microsoft Word desktop/mobile opening/editing, realistic Arabic samples and owner
-acceptance remain untested. Neither deployment nor merge is authorized here.
+acceptance remain untested. The later owner instruction “ادمج و كمل بدون توقف”
+authorizes engineering merge after exact-source CI and review. It does not
+authorize deployment, trial activation, payments or a new AI provider.
 See the [trial report](../ENGINEERING/REPORTS/2026-10-03-OFFICE_TELEGRAM_TRIAL.md)
 and [Codex handoff](CODEX-HANDOFF.md).
+
+See the [merge qualification report](../ENGINEERING/REPORTS/2026-10-03-OFFICE_MERGE_QUALIFICATION.md).
